@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+
+# Node / frontend
+node_modules/
+dist/
+app/web/dist/
+
+# Terraform
+*.tfstate*
+.terraform/
+
+# Generated synthetic data (sole data source; never committed)
+data/output/
+
+# Eval scratch
+evals/reports/*.tmp
+
+# OS
+.DS_Store
+
+# Local tooling overlay (versioned separately, never in this repo)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+docs/PROGRESS.md
+.tooling/
