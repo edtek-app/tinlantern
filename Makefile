@@ -12,19 +12,20 @@ test:
 run:
 	uvicorn app.main:app --reload
 
+# Every gate runs lint first, then the cumulative milestone-marked tests.
 gate-m0:
-	pytest -q -m m0 && $(MAKE) lint
+	$(MAKE) lint && pytest -q -m m0
 gate-m1:
-	pytest -q -m "m0 or m1"
+	$(MAKE) lint && pytest -q -m "m0 or m1"
 gate-m2:
-	pytest -q -m "m0 or m1 or m2"
+	$(MAKE) lint && pytest -q -m "m0 or m1 or m2"
 gate-m3:
-	pytest -q -m "m0 or m1 or m2 or m3"
+	$(MAKE) lint && pytest -q -m "m0 or m1 or m2 or m3"
 gate-m4:
-	pytest -q -m "m0 or m1 or m2 or m3 or m4"
+	$(MAKE) lint && pytest -q -m "m0 or m1 or m2 or m3 or m4"
 gate-m5:
-	pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5"
+	$(MAKE) lint && pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5"
 gate-m6:
-	terraform -chdir=infra fmt -check && terraform -chdir=infra validate && pytest -q
+	$(MAKE) lint && terraform -chdir=infra fmt -check && terraform -chdir=infra validate && pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5"
 gate-m7:
-	pytest -q -m demo && pytest -q
+	$(MAKE) lint && pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5 or demo"

@@ -2,7 +2,9 @@
 
 Format: Conventional Commits — `type(scope): summary` (≤72 chars,
 imperative). Types: feat, fix, refactor, test, docs, chore, ci, perf.
-Scopes: ingest, etl, warehouse, ml, llm, evals, app, infra, data, docs.
+Scopes: ingest, pipeline, warehouse, ml, llm, evals, app, infra, data, docs.
+(`warehouse` covers schema, DDL, and migration commits even though that
+code lives under `pipeline/`.)
 
 Body (when non-trivial): what changed and WHY — constraints, tradeoffs,
 alternatives rejected. Reference ADRs (`See ADR-0003`) and milestones
@@ -10,7 +12,7 @@ alternatives rejected. Reference ADRs (`See ADR-0003`) and milestones
 
 Examples:
 - feat(ingest): add batch statement endpoint with idempotency on id [M1]
-- fix(etl): make fact_activity load re-runnable; dedupe on natural key
+- fix(pipeline): make fact_activity load re-runnable; dedupe on natural key
 - test(ml): add calibration check to risk model eval suite [M3]
 
 Rules:
