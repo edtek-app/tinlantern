@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tinlantern"
+version = "0.0.0"
+description = "AI early-alert learning analytics platform for xAPI data"
+requires-python = ">=3.12"
+license = { text = "AGPL-3.0-or-later" }
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.2",
+    "pyyaml>=6.0",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "ruff>=0.6",
+    "httpx>=0.27",
+]
+
+[tool.setuptools]
+# No importable packages yet; add them here as they land (app, pipeline, ...).
+packages = []
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config"
+markers = [
+    "m0: milestone 0 - bootstrap & synthetic data",
+    "m1: milestone 1 - ingestion",
+    "m2: milestone 2 - warehouse & ETL",
+    "m3: milestone 3 - risk model",
+    "m4: milestone 4 - LLM layer + evals",
+    "m5: milestone 5 - dashboard",
+    "demo: demo-mode checks (M7 public demo)",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
