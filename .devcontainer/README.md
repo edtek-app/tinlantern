@@ -10,6 +10,7 @@ automatically.
 - **Docker-in-Docker** — so `docker compose` (Postgres, and later the full
   local stack) runs inside the container
 - **Node LTS** — for the React/Vite frontend (M5)
+- **GitHub CLI (`gh`)** — for PR and release workflows
 - **zsh**, passwordless `sudo`, a `C.UTF-8` locale
 
 ## First steps
