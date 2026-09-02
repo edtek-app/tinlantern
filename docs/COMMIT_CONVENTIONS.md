@@ -2,7 +2,8 @@
 
 Format: Conventional Commits — `type(scope): summary` (≤72 chars,
 imperative). Types: feat, fix, refactor, test, docs, chore, ci, perf.
-Scopes: ingest, pipeline, warehouse, ml, llm, evals, app, infra, data, docs.
+Scopes: ingest, pipeline, warehouse, ml, llm, evals, app, infra,
+devcontainer, data, docs.
 (`warehouse` covers schema, DDL, and migration commits even though that
 code lives under `pipeline/`.)
 
