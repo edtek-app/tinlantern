@@ -23,6 +23,15 @@ natural-language Q&A with citations.
   Learning Record Store: it accepts and validates the xAPI statement
   subset this platform uses, not the complete xAPI spec (state/activity
   profile APIs, full attachment handling, OAuth, etc.). See ADR-0001.
+- That subset is enforced **strictly**: the statement models set
+  `extra="forbid"`, so a statement carrying any property TinLantern does
+  not model is rejected rather than accepted-and-ignored. A conformant LRS
+  would accept it. This is the right trade for an analytics warehouse —
+  unmodelled data that silently vanishes is worse than a loud rejection —
+  but it does mean a standard xAPI emitter may need its statements
+  narrowed before this platform will take them. Rejected statements are
+  logged and auditable rather than dropped (M1), so a sender that falls
+  outside the subset produces visible evidence, not silent data loss.
 ## Run it yourself — TODO(M0): `make seed` lands with the data generator
 
 Prerequisites: Python 3.12 and Docker (both provided by the dev container

@@ -35,6 +35,28 @@ approach, and the warehouse schema layout.
   heavier than needed. Consequence: v1 is an **LRS-style endpoint**, not a
   fully ADL-conformant Learning Record Store. Documented in README
   limitations.
+  - **The models live in `app/xapi/` and the application owns them.**
+    `data/generator/` imports the contract; the dependency never runs the
+    other way. The alternative — the ingestion API importing its schema
+    *from* the synthetic data generator — inverts the dependency and would
+    be awkward to defend in review.
+  - **Written to the receiver's contract, with `extra="forbid"` on every
+    model.** An unrecognised key at any nesting depth is a rejection, not
+    decoration. This is the strict-subset posture, made mechanical rather
+    than intentional: a conformant LRS must accept the *whole* statement
+    shape including properties this platform ignores, and TinLantern
+    deliberately does not. The test suite is the guard — it must keep
+    exercising shapes the generator would never emit (extra keys, batch
+    envelopes, numeric timestamps), or the models would drift into fitting
+    their own emitter rather than an untrusted sender.
+  - Built at M0 because the generator needs the contract to emit against.
+    M1 then hardens *transport* — batching, idempotency, rejection
+    logging — not the schema.
+  - The accepted verb set is closed (see `VERB_IRIS`). M1's rejection path
+    is what makes that safe: an LMS sending an unmodelled verb produces a
+    visible rejection log, never silent data loss — and those logs are the
+    evidence any future case for widening the set would rest on.
+    **Loosening the verb set is an ADR, not a quiet edit.**
 - **ML:** pandas + scikit-learn. Exploration in `ml/notebooks/`;
   production code promoted to `ml/src/` as importable, tested modules.
 - **LLM:** provider-abstracted client in `app/llm/`. Providers:

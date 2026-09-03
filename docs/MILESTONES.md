@@ -20,6 +20,9 @@ complete. Every test carries a milestone marker, so nothing escapes a gate.
 - [ ] Alembic bootstrapped (`alembic.ini`, `migrations/`); migration `0001`
       creates the `raw` and `warehouse` schemas. Per ADR-0001 Alembic owns
       all DDL from here on — there is no database init-script path
+- [ ] xAPI statement models in `app/xapi/` — hand-authored Pydantic v2,
+      `extra="forbid"`, written to the receiver's contract (ADR-0001). The
+      generator is a client of this schema, not its owner
 - [ ] `data/generator/` produces configurable cohorts of xAPI statements
       (enrollments, course activity, assessment attempts, video events)
       with injectable "at-risk" behavior patterns
@@ -31,7 +34,9 @@ complete. Every test carries a milestone marker, so nothing escapes a gate.
 
 ## M1 — Ingestion
 **Goal:** xAPI statements land durably via API.
-- [ ] `POST /xapi/statements` (single + batch) with Pydantic validation
+- [ ] `POST /xapi/statements` (single + batch) validating against the
+      `app/xapi/` models built in M0. M1 adds transport concerns — batch
+      envelopes, idempotency, rejection logging — not schema work
 - [ ] Raw statements stored append-only in the `raw` schema; idempotent on
       statement id. The table lands as an Alembic migration on the `0001`
       baseline created in M0 — the migration tooling already exists
