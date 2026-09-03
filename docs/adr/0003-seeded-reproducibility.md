@@ -65,6 +65,30 @@ afterwards. The one place local wall-clock components are built is the
 23:59 deadline in `calendar.py`, an hour that exists on every date in
 every zone because IANA transitions occur around 02:00–03:00.
 
+**Statement ids are derived, not random.** A `uuid4()` per statement would
+break everything above: regenerating a cohort would rename every statement
+despite identical behaviour, and M1's acceptance criterion — idempotency
+on statement id — could not be tested honestly. Ids are `uuid5` over a
+fixed namespace and a `learner:course:sequence` key.
+
+The guarantee, stated precisely, because a weaker claim is easy to make by
+accident:
+
+- **Stable across regenerations.** The same seed and the same generator
+  code produce byte-identical ids. This is what ADR-0003 promises and all
+  that M1's idempotency test needs.
+- **Not stable across generator code changes.** The key is *positional*:
+  inserting an event mid-term shifts every later sequence number in that
+  learner-course, renaming those statements. No id scheme fixes this while
+  behaviour is changing — any behavioural edit reshapes the whole cohort
+  anyway, so the ids were never going to survive it.
+
+Content-derived keys would buy insertion-stability, at the cost of
+collision handling for genuinely identical events. Nothing downstream
+needs that property, so it is not bought. The namespace UUID is fixed
+forever; regenerating it would rename every statement in every cohort ever
+produced.
+
 ## Consequences
 - **Easier:** cohorts reproduce from `(config, seed)` alone, across
   machines and Python versions; a learner's history is stable as the
