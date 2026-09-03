@@ -29,8 +29,13 @@ dev = [
 ]
 
 [tool.setuptools]
-# No importable packages yet; add them here as they land (app, pipeline, ...).
-packages = []
+# Extended per milestone as packages land (pipeline, ml, ...).
+#
+# Listed explicitly rather than via find: auto-discovery, on purpose.
+# Explicit listing makes adding a package a visible diff line here, and
+# forgetting one fails loudly at import in the same session. Discovery
+# would make both silent. Revisit only if this list grows unwieldy.
+packages = ["app", "app.xapi"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
