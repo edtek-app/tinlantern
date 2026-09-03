@@ -32,16 +32,27 @@ natural-language Q&A with citations.
   narrowed before this platform will take them. Rejected statements are
   logged and auditable rather than dropped (M1), so a sender that falls
   outside the subset produces visible evidence, not silent data loss.
-## Run it yourself — TODO(M0): `make seed` lands with the data generator
+## Run it yourself
 
 Prerequisites: Python 3.12 and Docker (both provided by the dev container
 in `.devcontainer/`).
 
 ```sh
 make setup   # install deps, start Postgres 16, run migrations
-make seed    # generate a synthetic cohort            (TODO(M0))
+make seed    # generate a synthetic cohort
 make run     # serve the API                          (TODO(M1))
 ```
+
+`make seed` writes a reproducible cohort to `data/output/` — roughly
+190k xAPI statements for 120 learners across two courses, in about 25
+seconds. Alongside them it writes `ground_truth.ndjson`, the evaluation
+sidecar, and `manifest.json` recording the seed and the full resolved
+configuration that produced the run.
+
+Cohort shape is configured in `data/generator/cohort.example.yaml`; copy
+it to `cohort.yaml` to change it. Every contestable number lives there —
+cohort size, term length, the archetype mix, how much engagement converts
+into submitted work, and what counts as an at-risk outcome.
 
 `make setup` brings up the `db` service from `docker-compose.yml`, waits
 for it to report healthy, then runs `alembic upgrade head` — which creates

@@ -31,6 +31,25 @@ initialized, experienced (content views), played/paused/completed
 (assignments). Realistic clock: weekday/evening skew, term calendar,
 assignment due-date clustering, timezone.
 
+## Output
+`make seed` (i.e. `python -m data.generator`) writes to `data/output/`,
+which is gitignored:
+
+- `statements.ndjson` — the event stream, one xAPI statement per line
+- `ground_truth.ndjson` — the sidecar, one learner per line
+- `manifest.json` — seed, full resolved config, generator commit and
+  dirty flag, counts, timestamp
+
+One format for both artifacts: tuples survive, there are no escaping
+questions, and pandas reads it natively (`read_json(lines=True)`). A CSV
+view, if `evals/` ever wants one, is a derived convenience file rather
+than the canonical artifact.
+
+The full config is embedded in the manifest because a working
+`cohort.yaml` is gitignored — the seed alone would not let anyone else
+reproduce a run. Generation streams per learner, so the sidecar is
+measured from exactly the statements written, never a second pass.
+
 ## Ground truth for evaluation
 Emit a per-learner sidecar file (archetype, outcome) SEPARATE from the
 statement stream — used only by evals/ for labels. It must never flow
