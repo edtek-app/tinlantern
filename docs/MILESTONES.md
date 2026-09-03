@@ -7,11 +7,19 @@ merge. The active milestone is marked in `docs/PROGRESS.md`.
 Loop per milestone: plan task → build → tests green → owner reviews commit →
 commit → repeat → gate audit → owner review → PR merge → tag `mN`.
 
+CI runs the current milestone's gate — `.github/workflows/ci.yml` invokes
+`make gate-mN` for the active `N`, and that target advances as milestones
+complete. Every test carries a milestone marker, so nothing escapes a gate.
+
 ---
 
 ## M0 — Bootstrap & synthetic data
 **Goal:** Repo skeleton runs; realistic synthetic xAPI data exists.
-- [ ] Docker Compose brings up Postgres; `make setup` installs deps
+- [ ] Docker Compose brings up Postgres 16; `make setup` installs deps,
+      starts the database, and runs `alembic upgrade head`
+- [ ] Alembic bootstrapped (`alembic.ini`, `migrations/`); migration `0001`
+      creates the `raw` and `warehouse` schemas. Per ADR-0001 Alembic owns
+      all DDL from here on — there is no database init-script path
 - [ ] `data/generator/` produces configurable cohorts of xAPI statements
       (enrollments, course activity, assessment attempts, video events)
       with injectable "at-risk" behavior patterns
@@ -24,7 +32,9 @@ commit → repeat → gate audit → owner review → PR merge → tag `mN`.
 ## M1 — Ingestion
 **Goal:** xAPI statements land durably via API.
 - [ ] `POST /xapi/statements` (single + batch) with Pydantic validation
-- [ ] Raw statements stored append-only; idempotent on statement id
+- [ ] Raw statements stored append-only in the `raw` schema; idempotent on
+      statement id. The table lands as an Alembic migration on the `0001`
+      baseline created in M0 — the migration tooling already exists
 - [ ] Rejection path: invalid statements logged, not dropped silently
 **Gate:** `make gate-m1` — API tests incl. malformed input, duplicates,
 batch loads of ≥10k statements.

@@ -16,9 +16,12 @@ automatically.
 ## First steps
 
 ```sh
-make setup   # install dependencies and bring up Postgres
+make setup   # install deps, bring up Postgres 16, run migrations
 make test    # run the suite
 ```
+
+`make setup` waits for the database healthcheck and then runs
+`alembic upgrade head`, creating the `raw` and `warehouse` schemas.
 
 `postCreateCommand` already runs `pip install -e ".[dev]"` and marks
 `/workspace` as a git safe directory, so the test harness is usable as

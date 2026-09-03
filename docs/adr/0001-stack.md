@@ -17,7 +17,13 @@ approach, and the warehouse schema layout.
   OpenAPI, async-capable.
 - **DB access:** SQLAlchemy 2.x.
 - **Migrations:** Alembic. `alembic.ini` at the repo root, versioned
-  scripts in `migrations/`.
+  scripts in `migrations/`. Alembic **owns ALL DDL including initial schema
+  creation; no init-script path.** Migration `0001` creates the `raw` and
+  `warehouse` schemas. `docker-entrypoint-initdb.d` was rejected: those
+  hooks fire only on a fresh volume (so existing local databases drift) and
+  do not exist at all on managed Postgres at M6, making that path
+  throwaway. One mechanism owns DDL in every environment, from the first
+  schema to the last table.
 - **Database:** PostgreSQL 16, run as a **single container / single
   database** with **two schemas from day one** — `raw` (append-only
   ingested statements) and `warehouse` (star schema). The schema split is
