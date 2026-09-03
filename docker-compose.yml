@@ -1,0 +1,31 @@
+# Local development stack. One Postgres container, one database, two schemas
+# (`raw` and `warehouse`) — see ADR-0001.
+#
+# The schemas are NOT created here. There is deliberately no
+# docker-entrypoint-initdb.d mount: Alembic owns all DDL in every
+# environment, and initdb hooks do not exist on managed Postgres (M6).
+# `make setup` brings this up and then runs `alembic upgrade head`.
+
+services:
+  db:
+    image: postgres:16
+    container_name: tinlantern-db
+    environment:
+      POSTGRES_USER: tinlantern
+      POSTGRES_PASSWORD: tinlantern
+      POSTGRES_DB: tinlantern
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `make setup` uses `docker compose up --wait`, which blocks on this.
+      test: ["CMD-SHELL", "pg_isready -U tinlantern -d tinlantern"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
