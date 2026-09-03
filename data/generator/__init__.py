@@ -25,19 +25,24 @@ from data.generator.course import CourseStructure, ModuleStructure, build_course
 from data.generator.emit import (
     SESSION_VERBS,
     SessionWindow,
-    emit_content_statements,
-    emit_learner_statements,
+    content_events,
     session_windows,
-    statement_id,
 )
+from data.generator.events import Event
 from data.generator.rng import STREAMS, derive_seed, stream_rng
 from data.generator.roster import Learner, build_roster, realized_mix
+from data.generator.stream import (
+    learner_course_statements,
+    learner_statements,
+    registration_id,
+    statement_id,
+    to_statements,
+)
 
 __all__ = [
     "ARCHETYPES",
     "PROFILES",
     "SESSION_VERBS",
-    "SessionWindow",
     "STREAMS",
     "ArchetypeProfile",
     "CohortConfig",
@@ -45,22 +50,27 @@ __all__ = [
     "CourseSpec",
     "CourseStructure",
     "Deadline",
+    "Event",
     "Learner",
     "ModuleStructure",
+    "SessionWindow",
     "TermSpec",
     "build_courses",
     "build_roster",
     "build_schedule",
+    "content_events",
     "derive_seed",
-    "emit_content_statements",
-    "emit_learner_statements",
+    "learner_course_statements",
+    "learner_statements",
     "load_config",
     "profile",
     "realized_mix",
+    "registration_id",
     "sample_before_deadline",
     "sample_in_term",
     "session_windows",
     "statement_id",
     "stream_rng",
     "term_bounds",
+    "to_statements",
 ]

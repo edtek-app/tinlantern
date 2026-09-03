@@ -26,63 +26,27 @@ from __future__ import annotations
 
 import math
 import random
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
-from app.xapi import (
-    VERB_IRIS,
-    Activity,
-    Context,
-    ContextActivities,
-    Result,
-    Statement,
-    Verb,
-)
+from app.xapi import Activity, Result
 from data.generator.archetypes import PROFILES
 from data.generator.calendar import term_bounds
 from data.generator.clock import sample_in_term
 from data.generator.config import CohortConfig
 from data.generator.course import CourseStructure
+from data.generator.events import Event
 from data.generator.rng import stream_rng
 from data.generator.roster import Learner
-
-#: Fixed namespace for TinLantern statement ids. Never regenerate this —
-#: changing it renames every statement in every cohort ever produced.
-STATEMENT_NAMESPACE = uuid.UUID("6f0d3c8a-1b47-5e29-9c14-8a3f2d7b6e50")
 
 #: Verbs this module emits. Assessment verbs are emitted elsewhere.
 SESSION_VERBS: frozenset[str] = frozenset(
     {"initialized", "experienced", "played", "paused", "completed"}
 )
 
-_UTC = ZoneInfo("UTC")
-
 # Gap between consecutive events inside one session.
 _MIN_EVENT_GAP_SECONDS = 45
 _MAX_EVENT_GAP_SECONDS = 900
-
-
-def statement_id(learner_identifier: str, course_key: str, sequence: int) -> uuid.UUID:
-    """Derive a statement's id.
-
-    Args:
-        learner_identifier: The learner's opaque account name.
-        course_key: The course the statement belongs to.
-        sequence: Zero-based position in that learner-course's stream.
-
-    Returns:
-        A UUID stable for the same seed and generator code.
-    """
-    key = f"{learner_identifier}:{course_key}:{sequence}"
-    return uuid.uuid5(STATEMENT_NAMESPACE, key)
-
-
-def registration_id(learner_identifier: str, course_key: str) -> uuid.UUID:
-    """Derive the registration tying a learner's statements to a course."""
-    key = f"registration:{learner_identifier}:{course_key}"
-    return uuid.uuid5(STATEMENT_NAMESPACE, key)
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,11 +63,6 @@ class SessionWindow:
     closes: datetime
     progress: float
     intensity: float
-
-
-def _verb(name: str) -> Verb:
-    """Build a verb with an English display name."""
-    return Verb(id=VERB_IRIS[name], display={"en-US": name})
 
 
 def _sessions_in_week(rng: random.Random, expected: float) -> int:
@@ -200,10 +159,10 @@ def session_windows(
     return _plan_sessions(rng, config, learner, course)
 
 
-def emit_content_statements(
+def content_events(
     config: CohortConfig, learner: Learner, course: CourseStructure
-) -> tuple[Statement, ...]:
-    """Generate one learner's session and content statements for a course.
+) -> tuple[Event, ...]:
+    """Generate one learner's session and content events for a course.
 
     Args:
         config: The cohort configuration.
@@ -211,37 +170,22 @@ def emit_content_statements(
         course: The course structure to generate activity against.
 
     Returns:
-        Statements in chronological order, ids assigned in that order.
+        Events in chronological order, without ids — those are assigned
+        once every producer's events have been merged
+        (``data.generator.stream``).
     """
     rng = stream_rng(config.seed, "timestamps", learner.index, course.key)
-    registration = registration_id(learner.identifier, course.key)
-
     windows = _plan_sessions(rng, config, learner, course)
-    moments: list[tuple[datetime, str, Activity, Result | None]] = []
+
+    events: list[Event] = []
     for window in windows:
-        moments.extend(_session_events(config, rng, course, window))
+        events.extend(_session_events(config, rng, course, window))
 
     # Within a session a video keeps playing while the learner moves on, so
     # its `completed` can fall after the next content event. Sessions no
     # longer overlap, so this orders events inside one session only.
-    moments.sort(key=lambda entry: entry[0])
-    return tuple(
-        Statement(
-            id=statement_id(learner.identifier, course.key, sequence),
-            actor=learner.agent,
-            verb=_verb(verb_name),
-            object=activity,
-            result=result,
-            context=Context(
-                registration=registration,
-                platform="TinLantern",
-                language="en-US",
-                contextActivities=ContextActivities(parent=[course.activity]),
-            ),
-            timestamp=moment,
-        )
-        for sequence, (moment, verb_name, activity, result) in enumerate(moments)
-    )
+    events.sort(key=lambda event: event.moment)
+    return tuple(events)
 
 
 def _session_events(
@@ -249,7 +193,7 @@ def _session_events(
     rng: random.Random,
     course: CourseStructure,
     window: SessionWindow,
-) -> list[tuple[datetime, str, Activity, Result | None]]:
+) -> list[Event]:
     """Build one session: an `initialized`, then a burst of content events.
 
     Args:
@@ -259,13 +203,13 @@ def _session_events(
         window: The session's boundaries and engagement.
 
     Returns:
-        Events as ``(moment, verb, activity, result)``, all inside the window.
+        Events inside the window, in the order they were produced.
     """
     closes = window.closes
     module_index = _module_for_progress(course, window.progress)
     targets = _content_targets(course, module_index)
-    events: list[tuple[datetime, str, Activity, Result | None]] = [
-        (window.opened, "initialized", course.activity, None)
+    events: list[Event] = [
+        Event(moment=window.opened, verb="initialized", activity=course.activity)
     ]
 
     moment = window.opened
@@ -284,40 +228,38 @@ def _session_events(
             events.extend(
                 event
                 for event in _video_events(rng, activity, moment, window.intensity)
-                if event[0] < closes
+                if event.moment < closes
             )
         else:
-            events.append((moment, "experienced", activity, None))
+            events.append(Event(moment=moment, verb="experienced", activity=activity))
 
     return events
 
 
 def _video_events(
     rng: random.Random, video: Activity, started: datetime, intensity: float
-) -> list[tuple[datetime, str, Activity, Result | None]]:
+) -> list[Event]:
     """Play a video, sometimes pause it, and finish it if engaged enough.
 
     Completion probability tracks engagement, so a thriving learner's high
     video completion (DESIGN.md) is a consequence of their curve rather
     than a separate switch.
     """
-    events: list[tuple[datetime, str, Activity, Result | None]] = [
-        (started, "played", video, None)
-    ]
+    events: list[Event] = [Event(moment=started, verb="played", activity=video)]
     watched = rng.randint(60, 900)
 
     if rng.random() < 0.35:
         paused_at = started + timedelta(seconds=rng.randint(20, max(21, watched)))
-        events.append((paused_at, "paused", video, None))
+        events.append(Event(moment=paused_at, verb="paused", activity=video))
 
     if rng.random() < intensity:
         finished = started + timedelta(seconds=watched)
         events.append(
-            (
-                finished,
-                "completed",
-                video,
-                Result(completion=True, duration=_iso(watched)),
+            Event(
+                moment=finished,
+                verb="completed",
+                activity=video,
+                result=Result(completion=True, duration=_iso(watched)),
             )
         )
 
@@ -328,14 +270,3 @@ def _iso(seconds: int) -> str:
     """Format a whole number of seconds as an ISO 8601 duration."""
     minutes, remainder = divmod(seconds, 60)
     return f"PT{minutes}M{remainder}S" if minutes else f"PT{remainder}S"
-
-
-def emit_learner_statements(
-    config: CohortConfig, learner: Learner, courses: tuple[CourseStructure, ...]
-) -> tuple[Statement, ...]:
-    """Generate one learner's content statements across every course."""
-    return tuple(
-        statement
-        for course in courses
-        for statement in emit_content_statements(config, learner, course)
-    )

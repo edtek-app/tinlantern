@@ -18,15 +18,14 @@ import pytest
 from app.xapi import VERB_IRIS, Statement
 from data.generator.config import CohortConfig, load_config
 from data.generator.course import build_courses
-from data.generator.emit import (
-    SESSION_VERBS,
-    emit_content_statements,
-    emit_learner_statements,
+from data.generator.emit import SESSION_VERBS, session_windows
+from data.generator.roster import build_learner, build_roster
+from data.generator.stream import (
+    learner_course_statements,
+    learner_statements,
     registration_id,
-    session_windows,
     statement_id,
 )
-from data.generator.roster import build_learner, build_roster
 
 pytestmark = pytest.mark.m0
 
@@ -49,7 +48,7 @@ def learner_of(config: CohortConfig, archetype: str):
 
 def statements_for(config: CohortConfig, archetype: str) -> tuple[Statement, ...]:
     course = build_courses(config)[0]
-    return emit_content_statements(config, learner_of(config, archetype), course)
+    return learner_course_statements(config, learner_of(config, archetype), course)
 
 
 def quarter_counts(
@@ -96,7 +95,7 @@ def test_statements_reference_only_real_activities(config: CohortConfig) -> None
     """A dangling IRI would become an orphan row in the warehouse."""
     course = build_courses(config)[0]
     known = {activity.id for activity in course.activities()}
-    for statement in emit_content_statements(
+    for statement in learner_course_statements(
         config, learner_of(config, "thriving"), course
     ):
         assert statement.object_.id in known
@@ -106,7 +105,7 @@ def test_context_ties_statements_to_the_course(config: CohortConfig) -> None:
     course = build_courses(config)[0]
     learner = learner_of(config, "thriving")
     expected = registration_id(learner.identifier, course.key)
-    for statement in emit_content_statements(config, learner, course):
+    for statement in learner_course_statements(config, learner, course):
         assert statement.context is not None
         assert statement.context.registration == expected
         assert statement.context.contextActivities is not None
@@ -178,8 +177,8 @@ def test_volume_scales_with_configured_activity(config: CohortConfig) -> None:
     busier.activity.sessions_per_week = config.activity.sessions_per_week * 3
     course = build_courses(config)[0]
     learner = learner_of(config, "thriving")
-    assert len(emit_content_statements(busier, learner, course)) > len(
-        emit_content_statements(config, learner, course)
+    assert len(learner_course_statements(busier, learner, course)) > len(
+        learner_course_statements(config, learner, course)
     )
 
 
@@ -244,7 +243,7 @@ def test_every_statement_falls_inside_a_session_window(
     course = build_courses(config)[0]
     learner = learner_of(config, "thriving")
     windows = session_windows(config, learner, course)
-    statements = emit_content_statements(config, learner, course)
+    statements = learner_course_statements(config, learner, course)
 
     for statement in statements:
         assert statement.timestamp is not None
@@ -260,7 +259,7 @@ def test_session_windows_match_what_emission_used(config: CohortConfig) -> None:
     windows = session_windows(config, learner, course)
     openings = [
         statement.timestamp
-        for statement in emit_content_statements(config, learner, course)
+        for statement in learner_course_statements(config, learner, course)
         if statement.verb.id == VERB_IRIS["initialized"]
     ]
     assert [window.opened for window in windows] == openings
@@ -272,7 +271,7 @@ def test_statement_ids_are_unique_across_the_cohort(config: CohortConfig) -> Non
     ids = [
         statement.id
         for learner in build_roster(small)
-        for statement in emit_learner_statements(small, learner, courses)
+        for statement in learner_statements(small, learner, courses)
     ]
     assert len(ids) == len(set(ids))
     assert all(identifier is not None for identifier in ids)
@@ -298,17 +297,17 @@ def test_different_seed_produces_different_statements(config: CohortConfig) -> N
     other = config.model_copy(update={"seed": config.seed + 1})
     course = build_courses(config)[0]
     learner = build_learner(config, 3)
-    assert emit_content_statements(config, learner, course) != emit_content_statements(
-        other, learner, course
-    )
+    assert learner_course_statements(
+        config, learner, course
+    ) != learner_course_statements(other, learner, course)
 
 
 def test_growing_the_cohort_leaves_a_learner_untouched(config: CohortConfig) -> None:
     """Learner 3's term must not change because the cohort grew."""
     course = build_courses(config)[0]
-    small = emit_content_statements(config, build_learner(config, 3), course)
+    small = learner_course_statements(config, build_learner(config, 3), course)
     larger = config.model_copy(update={"learners": 500})
-    assert emit_content_statements(larger, build_learner(larger, 3), course) == small
+    assert learner_course_statements(larger, build_learner(larger, 3), course) == small
 
 
 # --------------------------------------------------------------------------
