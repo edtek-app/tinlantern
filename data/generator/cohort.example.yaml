@@ -36,6 +36,14 @@ courses:
     assessments_per_module: 2
     assignments_per_module: 1
 
+risk:
+  # What counts as an at-risk outcome. The sidecar MEASURES this from the
+  # record each learner generates — it is never assigned alongside their
+  # archetype, so the M3 model cannot learn a leaked label (ADR-0004).
+  # Disagree with these numbers by editing them, not by editing code.
+  pass_threshold: 0.60
+  collapse_gap_days: 14
+
 # Behavioural generators, not labels — risk emerges from the behaviour
 # these produce, so the M3 model never sees a leaked target.
 # Weights must sum to 1.0.

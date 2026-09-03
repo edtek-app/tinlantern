@@ -103,6 +103,25 @@ class TermSpec(_Strict):
         return (self.end - self.start).days
 
 
+class RiskSpec(_Strict):
+    """What counts as an at-risk outcome when deriving ground truth.
+
+    The outcome in the evaluation sidecar is *measured* from the record a
+    learner generates, never assigned alongside their archetype (ADR-0004).
+    These are the thresholds that measurement uses. They live in
+    configuration rather than in code so "at risk" stays a visible, tunable
+    decision that a reader can disagree with.
+
+    Consumed by the ground-truth sidecar; declared here so the definition
+    is versioned with the cohort it describes.
+    """
+
+    #: Mean scaled score below which a learner's term counts as failing.
+    pass_threshold: float = Field(ge=0.0, le=1.0)
+    #: An inactivity gap at least this long counts as engagement collapse.
+    collapse_gap_days: int = Field(ge=1, le=365)
+
+
 class CohortConfig(_Strict):
     """A complete, reproducible description of a synthetic cohort."""
 
@@ -112,6 +131,7 @@ class CohortConfig(_Strict):
     term: TermSpec
     courses: list[CourseSpec] = Field(min_length=1)
     archetype_mix: dict[str, float]
+    risk: RiskSpec
 
     @field_validator("base_iri")
     @classmethod

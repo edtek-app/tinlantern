@@ -6,6 +6,7 @@ enters this repository (ADR-0002). Statements are emitted against the
 its owner (ADR-0001).
 """
 
+from data.generator.archetypes import PROFILES, ArchetypeProfile, profile
 from data.generator.calendar import (
     CourseSchedule,
     Deadline,
@@ -25,7 +26,9 @@ from data.generator.rng import STREAMS, derive_seed, stream_rng
 
 __all__ = [
     "ARCHETYPES",
+    "PROFILES",
     "STREAMS",
+    "ArchetypeProfile",
     "CohortConfig",
     "CourseSchedule",
     "CourseSpec",
@@ -37,6 +40,7 @@ __all__ = [
     "build_schedule",
     "derive_seed",
     "load_config",
+    "profile",
     "sample_before_deadline",
     "sample_in_term",
     "stream_rng",
