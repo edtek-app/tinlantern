@@ -18,6 +18,9 @@ Examples:
 
 Rules:
 - One logical change per commit. No "WIP", "fixes", "update".
+- Every commit belonging to a milestone's work carries that milestone's
+  `[Mn]` tag — feat, fix, build, docs, chore alike. The tag marks
+  membership in a milestone, not the type of the commit.
 - Every commit message is drafted, then reviewed and approved by the owner
   before commit. Nothing lands unreviewed.
 - History is portfolio evidence: write messages a hiring manager will read.
