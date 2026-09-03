@@ -68,6 +68,14 @@ approach, and the warehouse schema layout.
   S3), introduced at M6.
 - **Tooling:** pytest with milestone markers (`m0`–`m5` plus `demo`);
   ruff for lint and formatting.
+- **Packaging:** the `packages` list in `pyproject.toml` is a **deployment
+  manifest** — if a package is listed it ships to the M6 runtime.
+  Development tooling (`data/`, `evals/`) stays importable from the
+  repository root but is never listed; a synthetic data generator has no
+  business in a production Lambda. Packages are enumerated explicitly
+  rather than found by `find:` discovery, so adding one is a visible diff
+  line and forgetting one fails loudly at import in the same session.
+  A gate test enforces this rather than review memory.
 
 ## Consequences
 - **Easier:** one language end-to-end; local stack is a single Postgres
