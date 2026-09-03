@@ -43,6 +43,41 @@ disagrees with where the line sits edits the YAML and regenerates. Burying
 those numbers in a function would make the most contestable decision in
 the dataset the least visible one.
 
+**One pass threshold, applied at both granularities.**
+`RiskSpec.pass_threshold` decides whether a single assessment emits
+`passed` or `failed`, and whether a learner's term mean counts as failing.
+One knob, one meaning of passing. Two numbers would need reconciling by
+every reader, and would let item-level and term-level "passing" drift into
+contradiction. If M3 ever needs them decoupled, that is an ADR with
+evidence, not a quiet second constant.
+
+**Features come from a prefix window; the outcome comes from the whole
+term. This is binding on M3.**
+
+Deriving the outcome from the full-term mean creates a trap that is easy
+to walk into and embarrassing to defend. Scores are directly observable in
+the statements, so a model handed the *whole* term can simply recompute
+`mean(score) < pass_threshold`, post a near-perfect ROC-AUC, and have
+predicted nothing at all. The evaluation would be measuring label
+reconstruction.
+
+What makes the task real is the gap between what is known early and what
+happens later — which is what "early alert" means. So:
+
+- `RiskSpec.feature_window_weeks` caps how much of the term M3 may build
+  features from. It is configuration, not a modelling constant, by the same
+  standard as `pass_threshold`: "how early is early" is a contestable
+  product decision, and burying it in feature code would hide the number
+  that most determines whether the results mean anything.
+- The outcome is still measured across the full term.
+- The leakage guard ADR-0002 requires extends to enforcing this: it must
+  assert that no feature draws on statements timestamped after the window
+  closes, not merely that the sidecar never reaches the warehouse.
+
+Recorded in M3's acceptance criteria in `MILESTONES.md`, so the constraint
+is waiting when that work begins rather than depending on someone
+rereading this record.
+
 **The realized outcome mix is an output, not an input.** Because outcomes
 are measured, some `procrastinator` learners land on the failing side and
 some `disengaging` learners scrape through. That is deliberate: a label

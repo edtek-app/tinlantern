@@ -59,6 +59,13 @@ DQ checks pass; sample analytical queries return expected results.
 **Goal:** Per-student risk score with an honest evaluation.
 - [ ] Feature pipeline from warehouse (engagement recency, assessment
       trajectory, pacing vs cohort)
+- [ ] **Features come only from the first `risk.feature_window_weeks` of
+      the term; the outcome is measured across the whole term.** Without
+      this the model can recompute the label from full-term scores and
+      score perfectly while predicting nothing (ADR-0004). The leakage
+      guard must assert no feature reads a statement timestamped after the
+      window closes — not merely that the sidecar stays out of the
+      warehouse.
 - [ ] Baseline model (logistic regression) THEN one stronger model;
       compare in `ml/notebooks/`, promote winner to `ml/src/`
 - [ ] Evaluation report: ROC-AUC, precision/recall at alert threshold,
