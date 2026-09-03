@@ -78,6 +78,52 @@ Recorded in M3's acceptance criteria in `MILESTONES.md`, so the constraint
 is waiting when that work begins rather than depending on someone
 rereading this record.
 
+**How the outcome is measured.** Two signals, both configured:
+
+- **Score.** The mean scaled score over every *scheduled* item, with
+  missing work counted as zero, compared against `pass_threshold`.
+  Gradebook semantics. Averaging over only submitted work would let a
+  learner who vanished in week five post a respectable mean from three
+  early assessments — the exact failure this project exists to catch.
+- **Collapse.** The longest gap between sessions across all of a learner's
+  courses, compared against `collapse_gap_days`. Gaps read
+  `emit.session_windows` and nothing else, so a gap has one definition
+  rather than being re-derived from the statement stream. Person-level,
+  not per-course: someone active in one course has not stopped showing up.
+  The stretch from the last session to the end of term counts, since a
+  learner who quits mid-term has their entire disengagement in that
+  trailing gap.
+
+`at_risk` is either signal firing. Both components and their underlying
+measurements — term mean, longest gap in days, which courses bounded it,
+items scheduled versus completed — are kept on the record, so `evals/` can
+analyse near-threshold cases rather than only counting fires.
+
+**Missing work is generated, not assumed.** A learner attempts a scheduled
+item with probability `min(1, engagement_intensity * submission_diligence)`.
+Without that gate every learner submitted everything on time regardless of
+how far they had checked out, and the dataset contained no missing work at
+all — leaving a prefix-window model nothing but a mild score trend to learn
+from.
+
+`submission_diligence` is configured for the same reason as
+`pass_threshold`: it decides how much of the loudest early-alert signal
+exists. It is calibrated to **2.4** against archetype intent, measured
+across the 120-learner example cohort:
+
+| value | consequence |
+|---|---|
+| 2.0 | coasting learners are 57% at risk — contradicts "middling scores" |
+| **2.4** | thriving and coasting submit ~everything; disengaging misses ~27% and all land at risk; recovering 20% at risk |
+| 3.0 | disengagement barely reaches the gradebook (19% missed) |
+
+At 2.4 the collapse signal is **subsumed by the score signal**: missing
+work scores zero, so any learner absent long enough to collapse has already
+failed on score, and collapse adds no at-risk classifications. It is
+retained as a measurement because M3 needs the gap as a feature and error
+analysis needs the breakdown — not because it changes the label today. A
+test pins this, so the property cannot drift unnoticed.
+
 **The realized outcome mix is an output, not an input.** Because outcomes
 are measured, some `procrastinator` learners land on the failing side and
 some `disengaging` learners scrape through. That is deliberate: a label
