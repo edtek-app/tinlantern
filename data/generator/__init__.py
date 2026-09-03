@@ -12,6 +12,7 @@ from data.generator.calendar import (
     build_schedule,
     term_bounds,
 )
+from data.generator.clock import sample_before_deadline, sample_in_term
 from data.generator.config import (
     ARCHETYPES,
     CohortConfig,
@@ -36,6 +37,8 @@ __all__ = [
     "build_schedule",
     "derive_seed",
     "load_config",
+    "sample_before_deadline",
+    "sample_in_term",
     "stream_rng",
     "term_bounds",
 ]
