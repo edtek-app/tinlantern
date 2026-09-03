@@ -17,6 +17,7 @@ from __future__ import annotations
 import uuid
 
 from app.xapi import Context, ContextActivities, Statement
+from data.generator.assess import assessment_events
 from data.generator.calendar import CourseSchedule
 from data.generator.config import CohortConfig
 from data.generator.course import CourseStructure
@@ -101,14 +102,16 @@ def learner_course_statements(
         config: The cohort configuration.
         learner: The learner to generate for.
         course: The course structure.
-        schedule: The course's deadlines. Accepted now so the
-            deadline-driven producer can plug in without reshaping this
-            signature again; content events do not use it.
+        schedule: The course's deadlines. Without it only content events
+            are produced, which is useful for testing one mechanic in
+            isolation but is not a complete term.
 
     Returns:
         The merged, ordered, identified stream.
     """
     events = content_events(config, learner, course)
+    if schedule is not None:
+        events = events + assessment_events(config, learner, course, schedule)
     return to_statements(learner, course, events)
 
 

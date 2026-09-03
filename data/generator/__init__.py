@@ -7,6 +7,7 @@ its owner (ADR-0001).
 """
 
 from data.generator.archetypes import PROFILES, ArchetypeProfile, profile
+from data.generator.assess import ASSESSMENT_VERBS, assessment_events
 from data.generator.calendar import (
     CourseSchedule,
     Deadline,
@@ -41,6 +42,7 @@ from data.generator.stream import (
 
 __all__ = [
     "ARCHETYPES",
+    "ASSESSMENT_VERBS",
     "PROFILES",
     "SESSION_VERBS",
     "STREAMS",
@@ -55,6 +57,7 @@ __all__ = [
     "ModuleStructure",
     "SessionWindow",
     "TermSpec",
+    "assessment_events",
     "build_courses",
     "build_roster",
     "build_schedule",

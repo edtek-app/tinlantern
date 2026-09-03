@@ -51,6 +51,10 @@ risk:
   # Disagree with these numbers by editing them, not by editing code.
   pass_threshold: 0.60
   collapse_gap_days: 14
+  # M3 may build features only from this many weeks of the term; the
+  # outcome is measured over all of it. Widen this and the task drifts
+  # toward reconstructing the label instead of predicting it.
+  feature_window_weeks: 4
 
 # Behavioural generators, not labels — risk emerges from the behaviour
 # these produce, so the M3 model never sees a leaked target.

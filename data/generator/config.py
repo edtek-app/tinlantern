@@ -145,6 +145,12 @@ class RiskSpec(_Strict):
     pass_threshold: float = Field(ge=0.0, le=1.0)
     #: An inactivity gap at least this long counts as engagement collapse.
     collapse_gap_days: int = Field(ge=1, le=365)
+    #: How much of the term M3 may use as features. The outcome is measured
+    #: over the WHOLE term, so a model given the whole term could simply
+    #: recompute the label and score perfectly while predicting nothing.
+    #: "How early is early" is a product decision, so it is configured
+    #: rather than buried in the modelling code. See ADR-0004.
+    feature_window_weeks: int = Field(ge=1, le=52)
 
 
 class CohortConfig(_Strict):
