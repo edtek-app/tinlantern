@@ -1,4 +1,4 @@
-.PHONY: setup migrate lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
+.PHONY: setup migrate seed lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
 
 # Local development default. Export DATABASE_URL to override (see .env.example).
 # The driver must be psycopg v3 — `postgresql://` alone resolves to psycopg2,
@@ -15,6 +15,11 @@ setup:
 # (ADR-0001). There is no database init-script path.
 migrate:
 	alembic upgrade head
+
+# The generator is dev tooling and is never installed, so it runs as a
+# module from the working tree. Run from the repository root.
+seed:
+	python -m data.generator
 
 lint:
 	ruff check . && ruff format --check .

@@ -46,6 +46,7 @@ from data.generator.truth import (
     derive_cohort_truth,
     derive_ground_truth,
 )
+from data.generator.writer import WriteResult, write_cohort
 
 __all__ = [
     "ARCHETYPES",
@@ -66,6 +67,7 @@ __all__ = [
     "ModuleStructure",
     "SessionWindow",
     "TermSpec",
+    "WriteResult",
     "assessment_events",
     "at_risk_rate",
     "build_courses",
@@ -87,5 +89,6 @@ __all__ = [
     "statement_id",
     "stream_rng",
     "term_bounds",
+    "write_cohort",
     "to_statements",
 ]
