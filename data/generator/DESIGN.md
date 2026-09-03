@@ -42,3 +42,8 @@ students to walk a viewer through: one clear week-3 disengagement the
 model flags early, one struggler who recovers after the alert window,
 one thriving student as contrast. Names obviously fictional; DEMO_MODE
 banner states all data is synthetic.
+
+**Select, never bend.** Outcomes are measured from the generated record
+(ADR-0004), so the narrative students are found by searching over seeds
+and inspecting realized outcomes — not by adjusting behaviour until a
+story lands. If no seed yields the walkthrough, the walkthrough changes.
