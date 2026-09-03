@@ -43,6 +43,13 @@ activity:
   sessions_per_week: 5.0
   min_events_per_session: 3
   max_events_per_session: 12
+  # Probability of turning work in is engagement x this, capped at 1.
+  # Calibrated against archetype intent (ADR-0004): at 2.4 a coasting
+  # learner still passes, a disengaging one misses ~27% of work and all
+  # of them land at risk. At 2.0 coasting fails too (57% at risk, which
+  # contradicts "middling scores"); at 3.0 disengagement stops showing
+  # up in the gradebook.
+  submission_diligence: 2.4
 
 risk:
   # What counts as an at-risk outcome. The sidecar MEASURES this from the

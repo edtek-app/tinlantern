@@ -117,6 +117,20 @@ class ActivitySpec(_Strict):
     sessions_per_week: float = Field(gt=0.0, le=100.0)
     min_events_per_session: int = Field(ge=1, le=200)
     max_events_per_session: int = Field(ge=1, le=200)
+    #: How readily engagement converts into turning work in. A learner
+    #: attempts a scheduled item with probability
+    #: ``min(1, engagement_intensity * submission_diligence)``.
+    #:
+    #: This is the third-most contestable number in the dataset: missing
+    #: work is the loudest early-alert signal there is, and this constant
+    #: decides how much of it exists. Calibrated to 2.4 against archetype
+    #: intent: thriving and coasting learners submit essentially
+    #: everything, while a disengaging learner (intensity ~0.06 by term
+    #: end) misses roughly a quarter of the term's work. Lower it and
+    #: coasting learners start failing, which contradicts their
+    #: "middling scores"; raise it and disengagement stops being visible
+    #: in the gradebook at all. See ADR-0004.
+    submission_diligence: float = Field(gt=0.0, le=10.0)
 
     @model_validator(mode="after")
     def _event_range_is_ordered(self) -> ActivitySpec:

@@ -54,6 +54,22 @@ def _mean_hours_before(affinity: float) -> float:
     return _LOOSEST_MEAN_HOURS - affinity * (_LOOSEST_MEAN_HOURS - _TIGHTEST_MEAN_HOURS)
 
 
+def _submission_chance(
+    config: CohortConfig, profile: ArchetypeProfile, progress: float
+) -> float:
+    """Probability that a learner turns in the item due at this point.
+
+    Engagement converts into submitted work at a rate set by
+    ``activity.submission_diligence``. Missing work is the loudest
+    early-alert signal in the dataset, so this is where it comes from: a
+    disengaging learner's intensity collapses late in the term and their
+    submissions collapse with it, while a thriving learner stays pinned at
+    certainty. See ADR-0004.
+    """
+    intensity = profile.engagement.at(progress)
+    return min(1.0, intensity * config.activity.submission_diligence)
+
+
 def _submittables(course: CourseStructure) -> dict[str, tuple[Activity, str]]:
     """Map every submittable activity IRI to its activity and kind."""
     found: dict[str, tuple[Activity, str]] = {}
@@ -114,6 +130,13 @@ def assessment_events(
     for deadline in schedule.deadlines():
         activity, kind = submittables[deadline.activity_iri]
         progress = min(max((deadline.due - start).total_seconds() / span, 0.0), 1.0)
+
+        # A learner who has stopped showing up stops turning work in. The
+        # draw happens before any timing draw, so a missed item consumes
+        # exactly one number and nothing else shifts.
+        if clock.random() >= _submission_chance(config, profile, progress):
+            continue
+
         opened = sample_before_deadline(
             clock,
             deadline.due,

@@ -88,11 +88,57 @@ def test_assessment_events_use_only_assessment_verbs(config: CohortConfig) -> No
         assert event.verb in ASSESSMENT_VERBS
 
 
-def test_scheduled_items_all_get_activity(config: CohortConfig) -> None:
-    """Every deadline must produce work; a silent skip would be invisible."""
+def test_a_fully_engaged_learner_submits_everything(config: CohortConfig) -> None:
+    """At the configured diligence, thriving engagement caps at certainty."""
     schedule = build_schedule(config)[0]
     touched = {event.activity.id for event in events_for(config, "thriving")}
     assert touched == {deadline.activity_iri for deadline in schedule.deadlines()}
+
+
+def _missed(config: CohortConfig, archetype: str) -> set[str]:
+    schedule = build_schedule(config)[0]
+    touched = {event.activity.id for event in events_for(config, archetype)}
+    return {d.activity_iri for d in schedule.deadlines()} - touched
+
+
+def test_disengaging_learners_stop_turning_work_in(config: CohortConfig) -> None:
+    """Missing work is the loudest early-alert signal; it must exist.
+
+    Before engagement gated participation, every learner submitted every
+    scheduled item on time no matter how far they had checked out — the
+    dataset had no missing work at all, and a prefix-window model had only
+    a mild score trend to learn from.
+    """
+    assert len(_missed(config, "disengaging")) > len(_missed(config, "thriving"))
+    assert _missed(config, "disengaging"), "disengaging learner missed nothing"
+
+
+def test_missing_work_concentrates_late_in_the_term(config: CohortConfig) -> None:
+    """A disengaging learner starts normally, then fades — not vice versa."""
+    deadlines = build_schedule(config)[0].deadlines()
+    missed = _missed(config, "disengaging")
+    half = len(deadlines) // 2
+    early = sum(1 for d in deadlines[:half] if d.activity_iri in missed)
+    late = sum(1 for d in deadlines[half:] if d.activity_iri in missed)
+    assert late > early, f"early={early} late={late}"
+
+
+def test_submission_gating_reads_the_configured_diligence(
+    config: CohortConfig,
+) -> None:
+    """Expectations from config, not restated constants."""
+    diligent = config.model_copy(deep=True)
+    diligent.activity.submission_diligence = config.activity.submission_diligence * 3
+    schedule = build_schedule(config)[0]
+    course = build_courses(config)[0]
+    learner = learner_of(config, "disengaging")
+    touched = {
+        event.activity.id
+        for event in assessment_events(diligent, learner, course, schedule)
+    }
+    assert len(touched) > len(
+        {event.activity.id for event in events_for(config, "disengaging")}
+    )
 
 
 def test_events_are_chronological_and_inside_the_term(config: CohortConfig) -> None:
