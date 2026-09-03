@@ -103,6 +103,31 @@ class TermSpec(_Strict):
         return (self.end - self.start).days
 
 
+class ActivitySpec(_Strict):
+    """How much activity a fully-engaged learner generates.
+
+    Engagement curves are relative (0–1); this sets the absolute scale.
+    It lives in configuration because it decides dataset size, generation
+    runtime, and how much signal the M3 model has to work with — all
+    contestable, so all visible.
+    """
+
+    #: Sessions per week for a learner at full engagement. An archetype's
+    #: curve scales this down across the term.
+    sessions_per_week: float = Field(gt=0.0, le=100.0)
+    min_events_per_session: int = Field(ge=1, le=200)
+    max_events_per_session: int = Field(ge=1, le=200)
+
+    @model_validator(mode="after")
+    def _event_range_is_ordered(self) -> ActivitySpec:
+        if self.min_events_per_session > self.max_events_per_session:
+            raise ValueError(
+                f"min_events_per_session ({self.min_events_per_session}) exceeds "
+                f"max_events_per_session ({self.max_events_per_session})"
+            )
+        return self
+
+
 class RiskSpec(_Strict):
     """What counts as an at-risk outcome when deriving ground truth.
 
@@ -131,6 +156,7 @@ class CohortConfig(_Strict):
     term: TermSpec
     courses: list[CourseSpec] = Field(min_length=1)
     archetype_mix: dict[str, float]
+    activity: ActivitySpec
     risk: RiskSpec
 
     @field_validator("base_iri")

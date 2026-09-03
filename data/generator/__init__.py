@@ -22,12 +22,22 @@ from data.generator.config import (
     load_config,
 )
 from data.generator.course import CourseStructure, ModuleStructure, build_courses
+from data.generator.emit import (
+    SESSION_VERBS,
+    SessionWindow,
+    emit_content_statements,
+    emit_learner_statements,
+    session_windows,
+    statement_id,
+)
 from data.generator.rng import STREAMS, derive_seed, stream_rng
 from data.generator.roster import Learner, build_roster, realized_mix
 
 __all__ = [
     "ARCHETYPES",
     "PROFILES",
+    "SESSION_VERBS",
+    "SessionWindow",
     "STREAMS",
     "ArchetypeProfile",
     "CohortConfig",
@@ -42,11 +52,15 @@ __all__ = [
     "build_roster",
     "build_schedule",
     "derive_seed",
+    "emit_content_statements",
+    "emit_learner_statements",
     "load_config",
     "profile",
     "realized_mix",
     "sample_before_deadline",
     "sample_in_term",
+    "session_windows",
+    "statement_id",
     "stream_rng",
     "term_bounds",
 ]

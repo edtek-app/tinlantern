@@ -36,6 +36,14 @@ courses:
     assessments_per_module: 2
     assignments_per_module: 1
 
+activity:
+  # Absolute scale for engagement. An archetype's curve (0-1) scales these
+  # down across the term, so these are the numbers for a learner at full
+  # engagement. Raising them makes a bigger, slower, richer dataset.
+  sessions_per_week: 5.0
+  min_events_per_session: 3
+  max_events_per_session: 12
+
 risk:
   # What counts as an at-risk outcome. The sidecar MEASURES this from the
   # record each learner generates — it is never assigned alongside their
