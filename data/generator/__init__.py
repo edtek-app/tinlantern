@@ -39,6 +39,13 @@ from data.generator.stream import (
     statement_id,
     to_statements,
 )
+from data.generator.truth import (
+    GRADED_VERBS,
+    GroundTruth,
+    at_risk_rate,
+    derive_cohort_truth,
+    derive_ground_truth,
+)
 
 __all__ = [
     "ARCHETYPES",
@@ -52,16 +59,21 @@ __all__ = [
     "CourseSpec",
     "CourseStructure",
     "Deadline",
+    "GRADED_VERBS",
     "Event",
+    "GroundTruth",
     "Learner",
     "ModuleStructure",
     "SessionWindow",
     "TermSpec",
     "assessment_events",
+    "at_risk_rate",
     "build_courses",
     "build_roster",
     "build_schedule",
     "content_events",
+    "derive_cohort_truth",
+    "derive_ground_truth",
     "derive_seed",
     "learner_course_statements",
     "learner_statements",
