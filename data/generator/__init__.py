@@ -23,6 +23,7 @@ from data.generator.config import (
 )
 from data.generator.course import CourseStructure, ModuleStructure, build_courses
 from data.generator.rng import STREAMS, derive_seed, stream_rng
+from data.generator.roster import Learner, build_roster, realized_mix
 
 __all__ = [
     "ARCHETYPES",
@@ -34,13 +35,16 @@ __all__ = [
     "CourseSpec",
     "CourseStructure",
     "Deadline",
+    "Learner",
     "ModuleStructure",
     "TermSpec",
     "build_courses",
+    "build_roster",
     "build_schedule",
     "derive_seed",
     "load_config",
     "profile",
+    "realized_mix",
     "sample_before_deadline",
     "sample_in_term",
     "stream_rng",
