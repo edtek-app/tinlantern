@@ -24,6 +24,9 @@ app/web/dist/
 # Generated synthetic data (sole data source; never committed)
 data/output/
 
+# Working generator config; cohort.example.yaml is the committed default
+data/generator/cohort.yaml
+
 # Eval scratch
 evals/reports/*.tmp
 

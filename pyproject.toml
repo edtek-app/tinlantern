@@ -29,7 +29,10 @@ dev = [
 ]
 
 [tool.setuptools]
-# Extended per milestone as packages land (pipeline, ml, ...).
+# Deployment manifest — dev tooling (data/, evals/) is importable but never
+# listed. If a package appears here it ships to the M6 runtime; a synthetic
+# data generator has no business in a production Lambda. Enforced by
+# tests/test_packaging.py, not by memory.
 #
 # Listed explicitly rather than via find: auto-discovery, on purpose.
 # Explicit listing makes adding a package a visible diff line here, and

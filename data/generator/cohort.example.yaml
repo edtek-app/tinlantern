@@ -1,0 +1,48 @@
+# Synthetic cohort configuration — copy to cohort.yaml and edit.
+#
+#   cp data/generator/cohort.example.yaml data/generator/cohort.yaml
+#
+# cohort.yaml is gitignored; this example is the committed default, the
+# same pattern as .env.example. All data produced from it is synthetic
+# (ADR-0002) — no real learner ever appears in this repository.
+
+# Every run is reproducible from this seed. Change it for a different
+# cohort; keep it fixed to regenerate the same one.
+seed: 20260301
+
+learners: 120
+
+# Absolute IRI prefix for every generated activity. No trailing slash:
+# activity IRIs are built by appending to it.
+base_iri: https://tinlantern.example/xapi
+
+term:
+  start: 2026-01-12
+  end: 2026-05-01
+  timezone: America/New_York
+
+courses:
+  - key: analytics-101
+    title: Introduction to Learning Analytics
+    modules: 12
+    videos_per_module: 3
+    assessments_per_module: 1
+    assignments_per_module: 1
+
+  - key: stats-200
+    title: Statistics for Educators
+    modules: 10
+    videos_per_module: 2
+    assessments_per_module: 2
+    assignments_per_module: 1
+
+# Behavioural generators, not labels — risk emerges from the behaviour
+# these produce, so the M3 model never sees a leaked target.
+# Weights must sum to 1.0.
+archetype_mix:
+  thriving: 0.20
+  coasting: 0.25
+  procrastinator: 0.20
+  disengaging: 0.15
+  struggling: 0.12
+  recovering: 0.08
