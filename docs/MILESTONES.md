@@ -48,7 +48,11 @@ complete. Every test carries a milestone marker, so nothing escapes a gate.
 - [ ] Raw statements stored append-only in the `raw` schema; idempotent on
       statement id. The table lands as an Alembic migration on the `0001`
       baseline created in M0 — the migration tooling already exists
-- [ ] Rejection path: invalid statements logged, not dropped silently
+- [ ] Rejection path: invalid statements logged, not dropped silently.
+      The mechanism is the durable `raw.rejections` table created in
+      migration `0002` — a log line is not queryable evidence (ADR-0005).
+      Every refusal writes through `app.raw.record_rejection`, so a
+      rejection means the same thing wherever it came from
 **Gate:** `make gate-m1` — API tests incl. malformed input, duplicates,
 batch loads of ≥10k statements.
 **Owner review:** error handling deliberate; ADR for storage layout.
