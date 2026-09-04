@@ -90,6 +90,12 @@ approach, and the warehouse schema layout.
   line and forgetting one fails loudly at import in the same session.
   A gate test enforces this rather than review memory.
 
+  The manifest follows the architecture actually being built, and changes
+  with it. `pipeline` is listed from M2 because the ETL is designed to run
+  in the deployed environment. If M6's database ADR instead chooses a
+  precomputed demo store, the manifest changes then — that is the ADR's
+  job at the time, not a hedge to build in now.
+
 ## Consequences
 - **Easier:** one language end-to-end; local stack is a single Postgres
   container; the architecture story uses standard, widely understood
