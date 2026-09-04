@@ -42,13 +42,13 @@ complete. Every test carries a milestone marker, so nothing escapes a gate.
 
 ## M1 — Ingestion
 **Goal:** xAPI statements land durably via API.
-- [ ] `POST /xapi/statements` (single + batch) validating against the
+- [x] `POST /xapi/statements` (single + batch) validating against the
       `app/xapi/` models built in M0. M1 adds transport concerns — batch
       envelopes, idempotency, rejection logging — not schema work
-- [ ] Raw statements stored append-only in the `raw` schema; idempotent on
+- [x] Raw statements stored append-only in the `raw` schema; idempotent on
       statement id. The table lands as an Alembic migration on the `0001`
       baseline created in M0 — the migration tooling already exists
-- [ ] Rejection path: invalid statements logged, not dropped silently.
+- [x] Rejection path: invalid statements logged, not dropped silently.
       The mechanism is the durable `raw.rejections` table created in
       migration `0002` — a log line is not queryable evidence (ADR-0005).
       Every refusal writes through `app.raw.record_rejection`, so a
