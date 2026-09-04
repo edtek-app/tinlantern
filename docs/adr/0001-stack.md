@@ -52,6 +52,14 @@ approach, and the warehouse schema layout.
   - Built at M0 because the generator needs the contract to emit against.
     M1 then hardens *transport* — batching, idempotency, rejection
     logging — not the schema.
+  - `registered` was added to the accepted verb set during the M0 audit,
+    which found MILESTONES.md asking for enrollments as a statement
+    category while DESIGN.md's verb set had none. This widens the receiver
+    contract by one verb, deliberately: an enrollment is a fact in its own
+    right, and inferring it from a learner's first `initialized` would
+    leave a learner who never opens a course with no enrollment at all —
+    precisely the population an early-alert system exists to find. M2's
+    dimensional model wants enrollment as a fact.
   - The accepted verb set is closed (see `VERB_IRIS`). M1's rejection path
     is what makes that safe: an LMS sending an unmodelled verb produces a
     visible rejection log, never silent data loss — and those logs are the

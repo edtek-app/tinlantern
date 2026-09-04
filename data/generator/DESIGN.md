@@ -26,9 +26,11 @@ behavior*, so the M3 model learns real patterns, not a leaked label.
   upward mid-term (tests that alerts can clear)
 
 ## Statement coverage (minimum verb set)
-initialized, experienced (content views), played/paused/completed
-(video), attempted/answered/passed/failed (assessments), submitted
-(assignments). Realistic clock: weekday/evening skew, term calendar,
+registered (enrollment — one per learner-course at term start, emitted
+regardless of engagement so a learner who never opens a course is still
+enrolled), initialized, experienced (content views), played/paused/
+completed (video), attempted/answered/passed/failed (assessments),
+submitted (assignments). Realistic clock: weekday/evening skew, term calendar,
 assignment due-date clustering, timezone.
 
 ## Output

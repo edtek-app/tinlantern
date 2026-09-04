@@ -24,8 +24,11 @@ complete. Every test carries a milestone marker, so nothing escapes a gate.
       `extra="forbid"`, written to the receiver's contract (ADR-0001). The
       generator is a client of this schema, not its owner
 - [ ] `data/generator/` produces configurable cohorts of xAPI statements
-      (enrollments, course activity, assessment attempts, video events)
-      with injectable "at-risk" behavior patterns
+      with injectable "at-risk" behavior patterns, covering: enrollments
+      (`registered`, one per learner-course), course activity
+      (`initialized`, `experienced`), video events (`played`, `paused`,
+      `completed`), assessment attempts (`attempted`, `answered`,
+      `passed`, `failed`) and submissions (`submitted`)
 - [ ] Generator has unit tests incl. statement schema validation
 - [ ] CI runs lint + tests on every push
 **Gate:** `make gate-m0` — generator tests + schema validation + lint.
