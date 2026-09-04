@@ -1,4 +1,4 @@
-.PHONY: setup migrate db-reset seed ingest lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
+.PHONY: setup migrate db-reset seed ingest etl lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
 
 # Local development default. Export DATABASE_URL to override (see .env.example).
 # The driver must be psycopg v3 — `postgresql://` alone resolves to psycopg2,
@@ -34,6 +34,12 @@ seed:
 # shell). Re-running is a no-op: ingestion is idempotent by statement id.
 ingest:
 	python -m data.ingest
+
+# Loads raw.statements into the warehouse star schema. Incremental and
+# re-runnable: pages above a stored watermark, and the schema's UNIQUE
+# grain stops duplicates regardless.
+etl:
+	python -m pipeline
 
 lint:
 	ruff check . && ruff format --check .
