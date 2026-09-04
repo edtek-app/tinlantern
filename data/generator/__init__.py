@@ -29,6 +29,7 @@ from data.generator.emit import (
     content_events,
     session_windows,
 )
+from data.generator.enroll import ENROLLMENT_VERBS, enrollment_event
 from data.generator.events import Event
 from data.generator.rng import STREAMS, derive_seed, stream_rng
 from data.generator.roster import Learner, build_roster, realized_mix
@@ -51,6 +52,7 @@ from data.generator.writer import WriteResult, write_cohort
 __all__ = [
     "ARCHETYPES",
     "ASSESSMENT_VERBS",
+    "ENROLLMENT_VERBS",
     "PROFILES",
     "SESSION_VERBS",
     "STREAMS",
@@ -77,6 +79,7 @@ __all__ = [
     "derive_cohort_truth",
     "derive_ground_truth",
     "derive_seed",
+    "enrollment_event",
     "learner_course_statements",
     "learner_statements",
     "load_config",

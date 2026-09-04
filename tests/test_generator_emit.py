@@ -19,6 +19,7 @@ from app.xapi import VERB_IRIS, Statement
 from data.generator.config import CohortConfig, load_config
 from data.generator.course import build_courses
 from data.generator.emit import SESSION_VERBS, session_windows
+from data.generator.enroll import ENROLLMENT_VERBS
 from data.generator.roster import build_learner, build_roster
 from data.generator.stream import (
     learner_course_statements,
@@ -78,9 +79,11 @@ def test_every_statement_survives_the_xapi_contract(config: CohortConfig) -> Non
         assert Statement.model_validate(wire) == statement
 
 
-def test_only_session_verbs_are_emitted(config: CohortConfig) -> None:
-    """Assessment verbs are deadline-driven and land in a separate task."""
-    allowed = {VERB_IRIS[name] for name in SESSION_VERBS}
+def test_only_session_and_enrollment_verbs_are_emitted(
+    config: CohortConfig,
+) -> None:
+    """Without a schedule the stream is enrollment plus content only."""
+    allowed = {VERB_IRIS[name] for name in SESSION_VERBS | ENROLLMENT_VERBS}
     for statement in statements_for(config, "coasting"):
         assert statement.verb.id in allowed
 
@@ -88,7 +91,7 @@ def test_only_session_verbs_are_emitted(config: CohortConfig) -> None:
 def test_every_session_verb_actually_appears(config: CohortConfig) -> None:
     """A verb declared but never emitted would be a silent coverage gap."""
     seen = {statement.verb.id for statement in statements_for(config, "thriving")}
-    assert seen == {VERB_IRIS[name] for name in SESSION_VERBS}
+    assert seen == {VERB_IRIS[name] for name in SESSION_VERBS | ENROLLMENT_VERBS}
 
 
 def test_statements_reference_only_real_activities(config: CohortConfig) -> None:
@@ -239,7 +242,11 @@ def test_session_windows_never_overlap(config: CohortConfig) -> None:
 def test_every_statement_falls_inside_a_session_window(
     config: CohortConfig,
 ) -> None:
-    """No event may escape the session that produced it."""
+    """No behavioural event may escape the session that produced it.
+
+    Enrollment is exempt by design: it is a structural fact recorded at
+    term start, not something a learner did during a session.
+    """
     course = build_courses(config)[0]
     learner = learner_of(config, "thriving")
     windows = session_windows(config, learner, course)
@@ -247,6 +254,8 @@ def test_every_statement_falls_inside_a_session_window(
 
     for statement in statements:
         assert statement.timestamp is not None
+        if statement.verb.id == VERB_IRIS["registered"]:
+            continue
         assert any(
             window.opened <= statement.timestamp < window.closes for window in windows
         ), f"statement at {statement.timestamp} belongs to no session"

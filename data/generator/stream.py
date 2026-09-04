@@ -22,6 +22,7 @@ from data.generator.calendar import CourseSchedule
 from data.generator.config import CohortConfig
 from data.generator.course import CourseStructure
 from data.generator.emit import content_events
+from data.generator.enroll import enrollment_event
 from data.generator.events import Event, verb
 from data.generator.roster import Learner
 
@@ -109,7 +110,10 @@ def learner_course_statements(
     Returns:
         The merged, ordered, identified stream.
     """
-    events = content_events(config, learner, course)
+    # Enrollment leads. It sits at term start and is concatenated first, so
+    # the stable sort keeps it ahead of anything sharing that instant.
+    events: tuple[Event, ...] = (enrollment_event(config, course),)
+    events = events + content_events(config, learner, course)
     if schedule is not None:
         events = events + assessment_events(config, learner, course, schedule)
     return to_statements(learner, course, events)

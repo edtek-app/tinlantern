@@ -18,6 +18,7 @@ from data.generator.calendar import build_schedule, term_bounds
 from data.generator.config import CohortConfig, load_config
 from data.generator.course import build_courses
 from data.generator.emit import SESSION_VERBS
+from data.generator.enroll import ENROLLMENT_VERBS
 from data.generator.roster import build_roster
 from data.generator.stream import learner_course_statements, to_statements
 
@@ -79,7 +80,9 @@ def test_every_statement_survives_the_xapi_contract(config: CohortConfig) -> Non
 def test_the_full_design_verb_set_now_appears(config: CohortConfig) -> None:
     """DESIGN.md's minimum verb set, complete for the first time."""
     seen = {statement.verb.id for statement in statements_for(config, "struggling")}
-    expected = {VERB_IRIS[name] for name in SESSION_VERBS | ASSESSMENT_VERBS}
+    expected = {
+        VERB_IRIS[name] for name in SESSION_VERBS | ASSESSMENT_VERBS | ENROLLMENT_VERBS
+    }
     assert seen == expected
 
 

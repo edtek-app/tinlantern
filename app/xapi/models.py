@@ -94,6 +94,9 @@ Timestamp = Annotated[AwareDatetime, BeforeValidator(_reject_numeric_timestamp)]
 #: would land in the warehouse as an event no downstream job knows how to
 #: interpret.
 VERB_IRIS: dict[str, str] = {
+    # Enrollment is a fact in its own right, not something to infer from a
+    # learner's first `initialized` — see ADR-0001.
+    "registered": "http://adlnet.gov/expapi/verbs/registered",
     "initialized": "http://adlnet.gov/expapi/verbs/initialized",
     "experienced": "http://adlnet.gov/expapi/verbs/experienced",
     "played": "https://w3id.org/xapi/video/verbs/played",
