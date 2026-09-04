@@ -6,6 +6,12 @@
 DATABASE_URL ?= postgresql+psycopg://tinlantern:tinlantern@localhost:5432/tinlantern
 export DATABASE_URL
 
+# The suite runs against its OWN database, which it drops and recreates each
+# session. Named explicitly rather than derived from DATABASE_URL: deriving
+# a name is how a '_test' suffix ends up appended to something unexpected.
+TEST_DATABASE_URL ?= postgresql+psycopg://tinlantern:tinlantern@localhost:5432/tinlantern_test
+export TEST_DATABASE_URL
+
 setup:
 	pip install -e ".[dev]"
 	docker compose up -d --wait db

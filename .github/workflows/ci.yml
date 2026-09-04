@@ -25,6 +25,9 @@ jobs:
       # Must match docker-compose.yml and .env.example. The +psycopg suffix
       # is required: a bare postgresql:// URL resolves to psycopg2.
       DATABASE_URL: postgresql+psycopg://tinlantern:tinlantern@localhost:5432/tinlantern
+      # The suite drops and recreates this one each session; it is never
+      # derived from DATABASE_URL.
+      TEST_DATABASE_URL: postgresql+psycopg://tinlantern:tinlantern@localhost:5432/tinlantern_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
