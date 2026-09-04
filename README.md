@@ -52,8 +52,16 @@ in `.devcontainer/`).
 ```sh
 make setup   # install deps, start Postgres 16, run migrations
 make seed    # generate a synthetic cohort
-make run     # serve the API                          (TODO(M1))
+make run     # serve the API
+
+# in a second shell, once the API is up:
+make ingest          # load the cohort through the ingestion endpoint
+make etl && make dq  # build the warehouse, then check it
 ```
+
+`make etl` and `make dq` are separate on purpose: one exit code with one
+meaning each. A data-quality failure means the warehouse is wrong, not
+that the load broke.
 
 `make seed` writes a reproducible cohort to `data/output/` — roughly
 190k xAPI statements for 120 learners across two courses, in about 25
