@@ -98,15 +98,26 @@ development database.
   on the conflict branch only.
 - **Given up:** in-place correction, and the simplicity of unconditional
   `DO NOTHING`.
-- **Measured throughput (M1, local container):** 941 statements/sec —
-  192,431 statements in 204s at batch size 500, through the HTTP endpoint.
+- **Measured throughput (M1, dev container, 192,431 statements over HTTP
+  at batch size 500):** roughly **2,000 statements/sec at rest** — 94-104s
+  per full load across three runs. Two earlier runs measured 941/s and
+  876/s while the container was under concurrent load (12 CPUs, load
+  average 3.4); they are recorded here because the spread is the point.
+  A single figure would overstate the precision of a measurement taken on
+  a shared machine — treat ~2,000/s as the ceiling and ~900/s as what
+  contention costs.
+
+  The duplicate path is **not** slower than the insert path (2,034/s
+  versus 2,051/s), despite doing an extra read and canonical comparison
+  per statement. Re-loading a cohort is as cheap as loading it.
+
   The cost is per-statement `INSERT` round trips: `store_statements` loops
   rather than issuing multi-row inserts, because per-statement conflict
   detection is what the guarantees above rest on. Deliberately not
   optimised in M1; the trigger for that work is a real constraint, not a
   number that looks improvable.
 - **Revisit triggers:** the measured throughput becomes a constraint —
-  M6's cost model or M7's demo seeding finds 941/s unacceptable — in which
+  M6's cost model or M7's demo seeding finds ~2,000/s unacceptable — in which
   case batching the insert and its conflict comparison needs an ADR of its
   own; ingestion volume makes per-statement conflict reads measurable; a
   second producer needs to write to `raw` and the sequence becomes
