@@ -40,6 +40,11 @@ approach, and the warehouse schema layout.
     other way. The alternative — the ingestion API importing its schema
     *from* the synthetic data generator — inverts the dependency and would
     be awkward to defend in review.
+  - **Conformance deviations live in one place.** Every point where
+    TinLantern knowingly departs from a conformant LRS is listed in the
+    README limitations section. Deviations are now a category rather than
+    a one-off, so they get a single home a reader can check rather than
+    being scattered across ADRs and module docstrings.
   - **Written to the receiver's contract, with `extra="forbid"` on every
     model.** An unrecognised key at any nesting depth is a rejection, not
     decoration. This is the strict-subset posture, made mechanical rather
