@@ -61,7 +61,11 @@ batch loads of ≥10k statements.
 **Goal:** Raw events become a queryable star schema.
 - [ ] Dimensional model: fact_activity, fact_assessment; dims student,
       course, activity, date (documented in ARCHITECTURE.md with diagram)
-- [ ] Incremental ETL job (idempotent, re-runnable) raw → warehouse
+- [ ] Incremental ETL job (idempotent, re-runnable) raw → warehouse.
+      Must populate `fact_assessment.attempt_number`, with a test showing
+      a `struggling` learner has `attempt_number > 1` in the loaded
+      warehouse — the column was added in `0003` on M3's anticipated need,
+      and a column added on anticipation quietly stays null otherwise
 - [ ] Data-quality checks: row counts, null rates, referential integrity
 **Gate:** `make gate-m2` — ETL runs twice on same input without dupes;
 DQ checks pass; sample analytical queries return expected results.
