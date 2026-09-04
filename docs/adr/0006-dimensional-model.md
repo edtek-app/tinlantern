@@ -86,6 +86,40 @@ protected by a trigger; the warehouse is derived and rebuildable, so it
 carries no such restriction. Dropping and rebuilding it is a legitimate
 recovery path.
 
+## The ETL's two consequential choices
+
+Both touch the platform's premise rather than its plumbing, so they belong
+in the record rather than in a commit body a reader will not find.
+
+**The course comes from `context.contextActivities.parent`, never from
+parsing the activity IRI.** Parsing is the obvious shortcut — our own
+generator emits `.../course/{slug}/module/1`, and a regex would work
+today. It would also hard-code this generator's URL convention into the
+ETL, and the platform's stated premise (ARCHITECTURE.md) is consuming
+*any* xAPI emitter. Another system's IRIs are `urn:x-acme:offering:...` or
+worse, and nothing about their shape is guaranteed. The context is the
+xAPI-native place to say what a statement belongs to, and it is the only
+answer that survives contact with an emitter that is not ours.
+
+A test loads statements whose IRIs follow no TinLantern convention and
+asserts the course still resolves, so the shortcut cannot be reintroduced
+as an optimisation without the suite noticing.
+
+**The ETL inserts, then corrects.** `attempt_number` is recomputed after
+each batch over `occurred_at`, rather than derived at insert time as "one
+more than the count so far". The cheap version assumes arrival order
+matches event order, and ADR-0005 is explicit that it does not:
+`ingest_seq` records when we received a statement, `occurred_at` when the
+event happened, and nothing relates them. A statement arriving late but
+timestamped early must renumber every attempt that followed it — under
+insert-time derivation it would silently mis-number them instead.
+
+This is why the ETL is not a pure insert, and why the warehouse carries no
+append-only trigger: it is derived and correctable precisely so that a
+late arrival can be absorbed. A test loads attempts out of event order
+across two separate runs and asserts the final numbering follows event
+time.
+
 ## Consequences
 - **Easier:** narrow joins; a model an interviewer recognises immediately;
   re-runnable ETL by construction; the warehouse can be rebuilt from `raw`

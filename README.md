@@ -82,6 +82,10 @@ database init-script step; see ADR-0001.
 The default connection string is in `.env.example`. Export `DATABASE_URL`
 to point at a different database.
 
+`make test` runs against its own database (`TEST_DATABASE_URL`, default
+`tinlantern_test`), which it drops and recreates each run. Your
+development data is never touched by the suite.
+
 The `raw` schema is append-only — statements cannot be updated or deleted
 once stored (ADR-0005) — so a development database accumulates rows as you
 run the suite. `make db-reset` drops and rebuilds the raw tables empty.
