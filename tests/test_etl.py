@@ -583,6 +583,11 @@ def test_each_run_starts_with_a_fresh_cache(connection, monkeypatch) -> None:
     changed between runs must be re-read, not served stale. That is a
     lifecycle choice a future edit could silently break by hoisting the
     cache to module scope, and nothing else would fail if it did.
+
+    Asserts that the two runs share no cache object. Deliberately NOT that
+    load_batch was called a fixed number of times — a run pages, and how
+    many pages it needs depends on how much happens to be pending, which
+    this test does not control.
     """
     import pipeline.etl as etl
 
@@ -595,7 +600,7 @@ def test_each_run_starts_with_a_fresh_cache(connection, monkeypatch) -> None:
 
     monkeypatch.setattr(etl, "load_batch", spy)
 
-    for _ in range(2):
+    def one_run() -> set[int]:
         fresh = statement()
         connection.execute(
             text(
@@ -604,7 +609,14 @@ def test_each_run_starts_with_a_fresh_cache(connection, monkeypatch) -> None:
             ),
             {"i": fresh["id"], "p": json.dumps(fresh)},
         )
+        seen.clear()
         etl.run(connection)
+        return set(seen)
 
-    assert len(seen) == 2, "both runs should have loaded a page"
-    assert seen[0] != seen[1], "runs shared a cache; a stale key would survive"
+    first, second = one_run(), one_run()
+
+    assert first, "the first run loaded nothing"
+    assert second, "the second run loaded nothing"
+    assert len(first) == 1, "one run must use exactly one cache across its pages"
+    assert len(second) == 1
+    assert not (first & second), "runs shared a cache; a stale key would survive"
