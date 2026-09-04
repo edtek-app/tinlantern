@@ -326,6 +326,10 @@ def test_a_duplicate_does_not_advance_the_watermark(connection) -> None:
 def test_batch_load_of_ten_thousand_statements(connection) -> None:
     """The gate's volume criterion, using the generator's own output.
 
+    Statements get fresh ids: the same cohort may already be loaded in this
+    database (`make ingest`), and a test that depended on it not being
+    there would pass or fail according to what someone ran last.
+
     Falls back to synthesised statements when no cohort has been generated,
     so a fresh checkout still exercises the volume path.
     """
@@ -334,7 +338,9 @@ def test_batch_load_of_ten_thousand_statements(connection) -> None:
         statements = []
         with COHORT.open(encoding="utf-8") as handle:
             for line in handle:
-                statements.append(Statement.model_validate(json.loads(line)))
+                payload = json.loads(line)
+                payload["id"] = str(uuid4())
+                statements.append(Statement.model_validate(payload))
                 if len(statements) == target:
                     break
     else:

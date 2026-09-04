@@ -1,4 +1,4 @@
-.PHONY: setup migrate db-reset seed lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
+.PHONY: setup migrate db-reset seed ingest lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
 
 # Local development default. Export DATABASE_URL to override (see .env.example).
 # The driver must be psycopg v3 — `postgresql://` alone resolves to psycopg2,
@@ -29,6 +29,11 @@ db-reset:
 # module from the working tree. Run from the repository root.
 seed:
 	python -m data.generator
+
+# Posts the generated cohort to a RUNNING api (`make run` in another
+# shell). Re-running is a no-op: ingestion is idempotent by statement id.
+ingest:
+	python -m data.ingest
 
 lint:
 	ruff check . && ruff format --check .
