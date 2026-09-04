@@ -4,8 +4,13 @@ Each milestone has: goal, acceptance criteria, an automated **gate**
 (`make gate-mN`), and an **owner review checklist** done by a human before
 merge. The active milestone is marked in `docs/PROGRESS.md`.
 
-Loop per milestone: plan task → build → tests green → owner reviews commit →
-commit → repeat → gate audit → owner review → PR merge → tag `mN`.
+Loop per milestone: **opening a milestone bumps CI's gate target** →
+plan task → build → tests green → owner reviews commit → commit → repeat
+→ gate audit → owner review → PR merge → tag `mN`.
+
+The bump lands as its own `ci:` commit before any of the milestone's code,
+so the first feature commit is already validated by the new gate. Folded
+into a feature task it is the kind of step that silently does not happen.
 
 CI runs the current milestone's gate — `.github/workflows/ci.yml` invokes
 `make gate-mN` for the active `N`, and that target advances as milestones

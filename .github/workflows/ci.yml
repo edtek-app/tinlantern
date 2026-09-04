@@ -12,4 +12,4 @@ jobs:
       - run: pip install -e ".[dev]"
       # CI runs the current milestone's gate; advance this as milestones
       # complete. gate-mN runs lint first, then the cumulative marked tests.
-      - run: make gate-m0
+      - run: make gate-m1
