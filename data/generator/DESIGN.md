@@ -5,8 +5,15 @@ Built at M0 (everything downstream consumes it). The curated demo cohort
 
 ## Requirements
 - Output: valid xAPI statements (actor, verb, object, result, context,
-  timestamp), schema-validated in tests. Batch to file and/or POST
-  directly to the ingestion API.
+  timestamp), schema-validated in tests. Written to file by `make seed`.
+
+  The "POST directly to the ingestion API" half of this requirement is
+  satisfied by a **separate loader** (`data/loader.py`, `make ingest`)
+  rather than a `--post` flag on the generator. Generating and loading are
+  different jobs with different failure modes: a load can be re-run
+  against an unchanged file, and a generator that also posted would couple
+  a slow HTTP round trip to every regeneration. The file is the artifact;
+  the loader is one of its consumers.
 - Reproducible: every run parameterized by an explicit RNG seed.
 - Configurable via YAML: cohort size, course structure (modules,
   activities, assessments, videos), term length, archetype mix.
