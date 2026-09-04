@@ -21,7 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = ROOT / "pyproject.toml"
 
 #: Top-level directories that are development tooling, never shipped.
-DEV_ONLY_ROOTS = frozenset({"data", "evals", "tests", "ml", "infra"})
+DEV_ONLY_ROOTS = frozenset({"data", "evals", "tests", "infra"})
+
+#: Packages that must never ship even though their parent does. Label
+#: handling is an evaluation concern; shipping code that reads the
+#: ground-truth sidecar into production would undo ADR-0002.
+NEVER_SHIPPED = ("ml.evaluation",)
 
 
 def _packages() -> list[str]:
@@ -39,6 +44,21 @@ def test_dev_tooling_is_never_in_the_deployment_manifest() -> None:
     )
 
 
+def test_label_handling_never_ships() -> None:
+    """The sidecar must not reach the deployed runtime (ADR-0002).
+
+    ml/src is production code and ships; ml/evaluation reads labels and
+    does not. Enforced by the manifest rather than by trusting that
+    nothing imports it — a convention about imports is not a mechanism.
+    """
+    listed = set(_packages())
+    for package in NEVER_SHIPPED:
+        assert package not in listed, f"{package} would ship to the M6 runtime"
+        assert not [p for p in listed if p.startswith(f"{package}.")]
+
+    from ml.evaluation import load_labels  # noqa: F401  importable, unshipped
+
+
 def test_generator_is_importable_without_being_shipped() -> None:
     """Both halves of the rule at once: importable, and not in the manifest."""
     from data.generator import load_config  # noqa: F401
@@ -51,3 +71,4 @@ def test_application_packages_are_listed_explicitly() -> None:
     packages = _packages()
     assert "app" in packages
     assert "app.xapi" in packages
+    assert "ml.src" in packages, "promoted model code must ship"
