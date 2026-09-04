@@ -66,7 +66,16 @@ batch loads of ≥10k statements.
       a `struggling` learner has `attempt_number > 1` in the loaded
       warehouse — the column was added in `0003` on M3's anticipated need,
       and a column added on anticipation quietly stays null otherwise
-- [ ] Data-quality checks: row counts, null rates, referential integrity
+- [ ] Data-quality checks: row counts, null rates, referential integrity.
+      Reconciliation is the headline check — every statement at or below
+      the ETL watermark is in `fact_activity` or `etl_rejections`, and
+      none in neither, plus the same narrowed to graded statements and
+      `fact_assessment`. **This suite owns the assertion that
+      `warehouse.etl_rejections` is empty**: the ETL deliberately fails
+      only on what its own run rejected, since an ETL that failed forever
+      after one bad statement would be unusable. Checks declare
+      ABSOLUTE (one violation fails) or REPORTED (informational), and
+      every ABSOLUTE check is mutation-verified
 **Gate:** `make gate-m2` — ETL runs twice on same input without dupes;
 DQ checks pass; sample analytical queries return expected results.
 **Owner review:** schema defensible in an interview; DQ failures fail loudly.
