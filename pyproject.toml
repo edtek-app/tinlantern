@@ -38,7 +38,7 @@ dev = [
 # Explicit listing makes adding a package a visible diff line here, and
 # forgetting one fails loudly at import in the same session. Discovery
 # would make both silent. Revisit only if this list grows unwieldy.
-packages = ["app", "app.api", "app.raw", "app.xapi"]
+packages = ["app", "app.api", "app.raw", "app.xapi", "pipeline", "pipeline.warehouse"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
