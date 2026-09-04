@@ -15,22 +15,22 @@ complete. Every test carries a milestone marker, so nothing escapes a gate.
 
 ## M0 — Bootstrap & synthetic data
 **Goal:** Repo skeleton runs; realistic synthetic xAPI data exists.
-- [ ] Docker Compose brings up Postgres 16; `make setup` installs deps,
+- [x] Docker Compose brings up Postgres 16; `make setup` installs deps,
       starts the database, and runs `alembic upgrade head`
-- [ ] Alembic bootstrapped (`alembic.ini`, `migrations/`); migration `0001`
+- [x] Alembic bootstrapped (`alembic.ini`, `migrations/`); migration `0001`
       creates the `raw` and `warehouse` schemas. Per ADR-0001 Alembic owns
       all DDL from here on — there is no database init-script path
-- [ ] xAPI statement models in `app/xapi/` — hand-authored Pydantic v2,
+- [x] xAPI statement models in `app/xapi/` — hand-authored Pydantic v2,
       `extra="forbid"`, written to the receiver's contract (ADR-0001). The
       generator is a client of this schema, not its owner
-- [ ] `data/generator/` produces configurable cohorts of xAPI statements
+- [x] `data/generator/` produces configurable cohorts of xAPI statements
       with injectable "at-risk" behavior patterns, covering: enrollments
       (`registered`, one per learner-course), course activity
       (`initialized`, `experienced`), video events (`played`, `paused`,
       `completed`), assessment attempts (`attempted`, `answered`,
       `passed`, `failed`) and submissions (`submitted`)
-- [ ] Generator has unit tests incl. statement schema validation
-- [ ] CI runs lint + tests on every push
+- [x] Generator has unit tests incl. statement schema validation
+- [x] CI runs lint + tests on every push
 **Gate:** `make gate-m0` — generator tests + schema validation + lint.
 **Owner review:** commit log reads cleanly; ADR-0001 (stack) and ADR-0002
 (synthetic-data-only policy) merged; generated data looks plausible.
