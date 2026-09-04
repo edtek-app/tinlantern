@@ -1,4 +1,4 @@
-.PHONY: setup migrate seed lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
+.PHONY: setup migrate db-reset seed lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
 
 # Local development default. Export DATABASE_URL to override (see .env.example).
 # The driver must be psycopg v3 — `postgresql://` alone resolves to psycopg2,
@@ -14,6 +14,15 @@ setup:
 # Alembic owns all DDL, including creating the raw and warehouse schemas
 # (ADR-0001). There is no database init-script path.
 migrate:
+	alembic upgrade head
+
+# raw.* is append-only, so tests cannot clean up after themselves and a
+# development database accumulates rows across runs. This is the sanctioned
+# reset: drop the raw tables and rebuild them empty (ADR-0005's escape
+# hatch). It destroys every stored statement — never point it at anything
+# that matters.
+db-reset:
+	alembic downgrade 0001
 	alembic upgrade head
 
 # The generator is dev tooling and is never installed, so it runs as a

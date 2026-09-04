@@ -62,9 +62,20 @@ def rows(connection) -> int:
     return connection.execute(text("SELECT count(*) FROM raw.statements")).scalar_one()
 
 
-def rejections(connection) -> list[dict]:
+def rejections(connection, statement_id) -> list[dict]:
+    """Rejections for one statement.
+
+    Scoped rather than table-wide: the endpoint tests commit rows, and
+    append-only means nothing can be cleaned up between tests. An
+    assertion about the whole table would be an assertion about every
+    test that ever ran.
+    """
     result = connection.execute(
-        text("SELECT statement_id, reason, detail FROM raw.rejections ORDER BY 1")
+        text(
+            "SELECT statement_id, reason, detail FROM raw.rejections "
+            "WHERE statement_id = :i ORDER BY rejection_id"
+        ),
+        {"i": statement_id},
     )
     return [dict(row._mapping) for row in result]
 
@@ -136,7 +147,7 @@ def test_a_reordered_payload_is_a_retry_not_a_conflict(connection) -> None:
 
     outcome = store_statement(connection, Statement.model_validate(shuffled))
     assert outcome.status is StoreStatus.DUPLICATE
-    assert rejections(connection) == []
+    assert rejections(connection, original.id) == []
 
 
 def test_same_id_different_content_is_a_conflict(connection) -> None:
@@ -168,7 +179,7 @@ def test_a_conflict_is_logged_not_dropped(connection) -> None:
     )
     store_statement(connection, impostor)
 
-    logged = rejections(connection)
+    logged = rejections(connection, original.id)
     assert len(logged) == 1
     assert logged[0]["statement_id"] == original.id
     assert logged[0]["reason"] == RejectionReason.ID_CONFLICT
