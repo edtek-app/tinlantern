@@ -5,11 +5,34 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # From M1 the gate exercises real storage — duplicates, batch loads,
+    # append-only enforcement. None of that can be faked, and a suite that
+    # skipped those tests would report green while testing nothing.
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tinlantern
+          POSTGRES_PASSWORD: tinlantern
+          POSTGRES_DB: tinlantern
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tinlantern -d tinlantern"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Must match docker-compose.yml and .env.example. The +psycopg suffix
+      # is required: a bare postgresql:// URL resolves to psycopg2.
+      DATABASE_URL: postgresql+psycopg://tinlantern:tinlantern@localhost:5432/tinlantern
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -e ".[dev]"
+      # Alembic owns all DDL (ADR-0001), so CI builds its schema the same
+      # way every other environment does.
+      - run: make migrate
       # CI runs the current milestone's gate; advance this as milestones
       # complete. gate-mN runs lint first, then the cumulative marked tests.
       - run: make gate-m1
