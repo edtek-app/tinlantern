@@ -13,6 +13,7 @@ needs. A stronger model has to earn its place against this.
 from __future__ import annotations
 
 import pandas as pd
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -73,3 +74,45 @@ def drivers(model: Pipeline, features: pd.DataFrame, top: int = 3) -> pd.DataFra
         lambda row: ", ".join(row.abs().nlargest(top).index), axis=1
     )
     return pd.DataFrame({"top_drivers": ranked})
+
+
+def build_gradient_boosting() -> Pipeline:
+    """A gradient-boosted tree ensemble — the "stronger model" candidate.
+
+    No scaling: trees are invariant to monotone transforms of a feature,
+    so a pipeline step is added only to keep the two models' interfaces
+    identical. Kept small deliberately — at 120 learners a deep ensemble
+    would memorise the cohort, and the out-of-fold estimate would then be
+    measuring the split rather than the model.
+
+    It cannot produce per-learner signed contributions, which M3 requires
+    as "top contributing features per student". That is a criterion, not a
+    preference — see the model ADR.
+    """
+    return Pipeline(
+        [
+            (
+                "model",
+                HistGradientBoostingClassifier(
+                    max_iter=200,
+                    max_depth=3,
+                    learning_rate=0.1,
+                    class_weight="balanced",
+                    random_state=20260301,
+                ),
+            )
+        ]
+    )
+
+
+def supports_per_learner_drivers(model: Pipeline) -> bool:
+    """Whether this model can explain an individual learner's score.
+
+    M3 requires per-student drivers. A linear model gives them from signed
+    coefficients; a tree ensemble offers only global importances without
+    additional machinery. Used as the tiebreak when models are within
+    noise of each other.
+    """
+    return "scale" in model.named_steps and hasattr(
+        model.named_steps.get("model"), "coef_"
+    )
