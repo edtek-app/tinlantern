@@ -91,8 +91,14 @@ DQ checks pass; sample analytical queries return expected results.
       guard must assert no feature reads a statement timestamped after the
       window closes — not merely that the sidecar stays out of the
       warehouse.
-- [ ] Baseline model (logistic regression) THEN one stronger model;
-      compare in `ml/notebooks/`, promote winner to `ml/src/`
+- [ ] Baseline model (logistic regression) THEN one stronger model.
+      **Comparison logic lives in `ml/evaluation/` as tested code**; the
+      notebook in `ml/notebooks/` renders it and is explicitly
+      non-authoritative — authoritative numbers are in `evals/reports/`.
+      A notebook that could silently diverge from what was tested is the
+      same class of problem as a stale diagram, and making it
+      non-authoritative removes the risk rather than guarding it. Winner
+      promoted to `ml/src/`
 - [ ] Evaluation report: ROC-AUC, precision/recall at alert threshold,
       calibration; written to `evals/reports/`
 - [ ] Scoring job writes scores + top contributing features per student
