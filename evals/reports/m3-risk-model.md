@@ -1,6 +1,6 @@
 # M3 — Risk model evaluation
 
-> **Provenance.** Generated 2026-09-06T15:47:59+00:00 from commit `1558b753de90010e3d9a6fd0c8ac74da9d9fc2e7`  **working tree dirty**, cohort seed `20260301`, over 192,431 statements and 120 learners.
+> **Provenance.** Generated 2026-09-06T16:21:16+00:00 from commit `488ef0e3a9553905b941c02e75b8a910a1bc5acf`, cohort seed `20260301`, over 192,431 statements and 120 learners.
 >
 > Regenerate with `make report`. If these counts do not match the current warehouse, this report is stale.
 
@@ -23,6 +23,8 @@ An archetype with fewer than 5 at-risk learners is marked unreportable rather th
 | disengaging | 21 | 95.2% | 100.0% | 95.2% |
 | struggling | 14 | 100.0% | 100.0% | 100.0% |
 | recovering | 2 | unreportable (floor 5) | unreportable (floor 5) | unreportable (floor 5) |
+
+**The selected model's recall arrives with a cost attached.** Calibrating the tree ensemble drops disengaging recall from 100% to 95.2% — one fewer disengaging learner caught out of 21 — in exchange for a risk distribution an advisor can triage against. Raw gradient boosting caught that learner and scored 117 of 120 at exactly 0 or 1, which M5's cohort overview cannot render and no advisor can rank. The trade was made deliberately: one missed learner against a score that means nothing for anybody.
 
 ## Score usability — a stated requirement, not a metric
 
