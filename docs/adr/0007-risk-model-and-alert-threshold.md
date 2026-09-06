@@ -106,6 +106,53 @@ to this cohort. It is honest to say the value is currently untested by
 evidence, and that real data with a meaningful trade-off curve is what
 would test it.
 
+## Per-learner drivers
+
+M3 requires top contributing features per student. **Neither candidate
+produces them directly**, and the selected model rules out the cheap
+route: it wraps a tree ensemble in Platt scaling, so there are no
+coefficients, and a tree explainer would attribute the *pre-calibration*
+estimator's output rather than the score an advisor sees.
+
+**Chosen: ablation to the cohort median.** Each feature is replaced with
+the typical value and the model re-scored; the drop is that feature's
+contribution. Three reasons, in order:
+
+1. **It explains the displayed number.** Model-agnostic, so it runs
+   through the calibration wrapper. An attribution that explains a
+   different number than the one on screen is worse than none.
+2. **No new dependency**, and ~14 extra predictions per learner.
+3. It reads naturally to a non-technical advisor: *"if this learner's
+   failure count were typical, their risk would fall 0.31."*
+
+**The cost, carried on the payload rather than buried here.**
+Contributions do not sum to the score and they interact — on this cohort,
+ablating `mean_score_in_window` and `failures` together differs from the
+sum of ablating each by 0.085. The drivers payload therefore carries
+`additive: false` and an explicit caveat, so a dashboard cannot render
+them as a decomposition. SHAP would offer additivity, but of the wrong
+quantity.
+
+The median profile is a **fitted parameter**, like `CohortBaseline`:
+fitted on training rows and carried, never recomputed from the rows being
+explained.
+
+## Model persistence
+
+**Retrain every run.** At 120 learners it costs under a second, and it
+removes a class of confusion about which model produced a given score — a
+run is reproducible from the seed and the code alone. `model_version`
+records the git commit plus a dirty marker, derived rather than declared
+so it cannot decay into a constant nobody updates.
+
+**The tradeoff, which becomes a real constraint at M6:** there is no way
+to score against a previous model without checking out the code that
+produced it. Reproducing last month's alerts means reproducing last
+month's checkout. That is acceptable while scoring is a local job; when it
+moves to a deployed runtime and retraining per invocation stops being
+free, persisting a model artifact is the answer, and the version recorded
+here becomes the key that identifies it.
+
 ## Consequences
 - **Easier:** a usable risk distribution for M5; a decision rule that is
   tested code rather than prose; requirements that disqualify rather than
