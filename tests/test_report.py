@@ -208,3 +208,15 @@ def test_threshold_sweep_counts_misses_and_false_alarms() -> None:
     scores = pd.Series([0.9, 0.2, 0.8])
     rows = {t: (m, f) for t, _, _, m, f in threshold_sweep(truth, scores, (0.5,))}
     assert rows[0.5] == (1, 1)
+
+
+def test_the_report_being_written_does_not_count_as_a_dirty_tree() -> None:
+    """Otherwise every report would claim uncommitted code.
+
+    The artifact is always uncommitted at the moment it is generated;
+    counting it as dirt inverts what the flag is for.
+    """
+    from ml.evaluation.report import DEFAULT_PATH
+
+    captured = collect_provenance(1, 2, 3, ignore=(DEFAULT_PATH,))
+    assert captured.dirty is not None

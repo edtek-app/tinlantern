@@ -52,8 +52,23 @@ class Provenance:
         )
 
 
-def collect_provenance(cohort_seed: int, statements: int, learners: int) -> Provenance:
-    """Capture the context these numbers were computed in."""
+def collect_provenance(
+    cohort_seed: int,
+    statements: int,
+    learners: int,
+    ignore: tuple[str, ...] = (DEFAULT_PATH,),
+) -> Provenance:
+    """Capture the context these numbers were computed in.
+
+    Args:
+        cohort_seed: The seed the cohort was generated from.
+        statements: Rows the numbers were computed over.
+        learners: Learners the numbers were computed over.
+        ignore: Paths excluded from the dirty check. The report being
+            written is always uncommitted at generation time; counting it
+            as dirt would make every report claim uncommitted code, which
+            is the opposite of what the flag is for.
+    """
 
     def git(*args: str) -> str | None:
         try:
@@ -63,6 +78,14 @@ def collect_provenance(cohort_seed: int, statements: int, learners: int) -> Prov
         return done.stdout.strip() if done.returncode == 0 else None
 
     status = git("git", "status", "--porcelain")
+    if status is not None:
+        changed = [
+            line
+            for line in status.splitlines()
+            if not any(path in line for path in ignore)
+        ]
+        status = "\n".join(changed)
+
     return Provenance(
         generated_at=datetime.now(UTC).isoformat(timespec="seconds"),
         commit=git("git", "rev-parse", "HEAD"),
