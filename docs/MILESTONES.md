@@ -12,6 +12,13 @@ The bump lands as its own `ci:` commit before any of the milestone's code,
 so the first feature commit is already validated by the new gate. Folded
 into a feature task it is the kind of step that silently does not happen.
 
+**Closing a milestone regenerates its reports** (`make report`) before the
+tag. Reports in `evals/reports/` are committed artifacts quoted elsewhere;
+each carries a provenance header naming the commit and row counts it was
+computed from, so a stale one declares itself — but only if someone looks.
+Regenerating at close means a report never drifts silently across a
+milestone boundary.
+
 CI runs the current milestone's gate — `.github/workflows/ci.yml` invokes
 `make gate-mN` for the active `N`, and that target advances as milestones
 complete. Every test carries a milestone marker, so nothing escapes a gate.
