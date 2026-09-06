@@ -47,8 +47,12 @@ def scored_cohort(connection, config):
     rng = random.Random(20260906)
     identifiers, at_risk = [], []
 
-    for _ in range(60):
-        student, identifier = make_learner(connection)
+    for index in range(60):
+        # Deterministic identifiers: the feature frame is sorted by them,
+        # so random ids would reorder the rows, which reshuffles the folds
+        # CalibratedClassifierCV builds internally and makes anything that
+        # depends on the fitted model flaky.
+        student, identifier = make_learner(connection, f"s-fix-{index:03d}")
         identifiers.append(identifier)
 
         # Independent variation across several features, so the model can
@@ -143,19 +147,27 @@ def test_ablating_two_features_is_not_the_sum_of_ablating_each(
     ordered = features[list(FEATURE_COLUMNS)]
     base = model.predict_proba(ordered)[:, 1]
 
-    pairs = [("mean_score_in_window", "failures"), ("events", "active_days")]
-    differences = []
-    for first, second in pairs:
+    # Searched across pairs rather than fixed on two: which features
+    # interact depends on what the model learned, and pinning specific
+    # pairs would make this a test of the fixture. The property is that
+    # SOME pair interacts — if none does, the caveat is unearned.
+    from itertools import combinations
+
+    worst = 0.0
+    for first, second in combinations(FEATURE_COLUMNS, 2):
         both = ordered.copy()
         both[first] = profile.values[first]
         both[second] = profile.values[second]
         joint = base - model.predict_proba(both)[:, 1]
         summed = (individual[first] + individual[second]).to_numpy()
-        differences.append(float(abs(joint - summed).max()))
+        worst = max(worst, float(abs(joint - summed).max()))
+        if worst > 1e-6:
+            break
 
-    assert max(differences) > 1e-6, (
-        "contributions summed exactly — either the model is degenerate or "
-        "the caveat is overstated; both need investigating"
+    assert worst > 1e-6, (
+        "no pair of features interacted at all — either the model is "
+        "degenerate on this fixture or the non-additivity caveat is "
+        "overstated; both need investigating before this is relaxed"
     )
 
 
