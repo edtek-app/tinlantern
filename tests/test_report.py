@@ -220,3 +220,16 @@ def test_the_report_being_written_does_not_count_as_a_dirty_tree() -> None:
 
     captured = collect_provenance(1, 2, 3, ignore=(DEFAULT_PATH,))
     assert captured.dirty is not None
+
+
+def test_the_calibration_tradeoff_arrives_with_the_recall_figure() -> None:
+    """Same discipline as the AUC caveat: the cost travels with the number.
+
+    A reader meeting 95.2% should learn immediately that it is 100% minus
+    one learner, traded for a distribution M5 depends on — not discover it
+    paragraphs later beside a table delta.
+    """
+    text = synthetic_report()
+    cost = text.index("cost attached")
+    assert text.index("Recall by archetype") < cost < text.index("Aggregate metrics")
+    assert "one fewer disengaging learner" in text

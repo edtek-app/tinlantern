@@ -157,7 +157,21 @@ def render(
         "",
     ]
 
-    out += ["## Recall by archetype", "", *_recall_table(comparison.reports), ""]
+    out += [
+        "## Recall by archetype",
+        "",
+        *_recall_table(comparison.reports),
+        "",
+        "**The selected model's recall arrives with a cost attached.** "
+        "Calibrating the tree ensemble drops disengaging recall from 100% "
+        "to 95.2% — one fewer disengaging learner caught out of 21 — in "
+        "exchange for a risk distribution an advisor can triage against. "
+        "Raw gradient boosting caught that learner and scored 117 of 120 "
+        "at exactly 0 or 1, which M5's cohort overview cannot render and "
+        "no advisor can rank. The trade was made deliberately: one missed "
+        "learner against a score that means nothing for anybody.",
+        "",
+    ]
 
     if comparison.usability:
         out += [
