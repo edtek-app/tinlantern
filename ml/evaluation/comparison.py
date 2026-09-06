@@ -27,7 +27,7 @@ answer. Recorded in the model ADR.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pandas as pd
 
@@ -39,6 +39,17 @@ from ml.src.model import ALERT_THRESHOLD, score, supports_per_learner_drivers
 #: every one of them, and strictly better on at least one, to dominate.
 DECISION_METRICS = ("mean_reportable_recall", "precision")
 
+#: Scores strictly inside these bounds count as "interior" — a learner the
+#: model expresses genuine uncertainty about rather than pinning to an end.
+INTERIOR_BOUNDS = (0.05, 0.95)
+
+#: **A stated requirement, fixed before any result was seen.** M5's cohort
+#: overview needs a risk DISTRIBUTION and a drill-down score; a model that
+#: pins nearly every learner to 0 or 1 can produce neither — a histogram of
+#: two bars is not a distribution, and a ranking of ties is not a ranking.
+#: At least this share of learners must score in the interior.
+MIN_INTERIOR_FRACTION = 0.20
+
 
 @dataclass(frozen=True, slots=True)
 class Candidate:
@@ -49,6 +60,15 @@ class Candidate:
     interpretable: bool
 
 
+def interior_fraction(scores: pd.Series) -> float:
+    """Share of learners the model does not pin to an extreme.
+
+    The mechanical form of M5's distribution requirement.
+    """
+    low, high = INTERIOR_BOUNDS
+    return float(((scores > low) & (scores < high)).mean())
+
+
 @dataclass(frozen=True, slots=True)
 class Comparison:
     """The measured head-to-head, and how it was decided."""
@@ -57,9 +77,27 @@ class Comparison:
     winner: str
     reason: str
     tied: bool
+    #: Interior fraction per candidate: M5's distribution requirement.
+    usability: dict[str, float] = field(default_factory=dict)
+    #: Candidates excluded for failing a stated requirement, and why.
+    disqualified: dict[str, str] = field(default_factory=dict)
 
     def summary(self) -> str:
         parts = [report.summary() for report in self.reports]
+        if self.usability:
+            rows = "\n".join(
+                f"    {name:<32} {value:5.1%}"
+                + (
+                    "  FAILS distribution requirement"
+                    if name in self.disqualified
+                    else ""
+                )
+                for name, value in self.usability.items()
+            )
+            parts.append(
+                "score usability (share of learners scored in the interior; "
+                f"floor {MIN_INTERIOR_FRACTION:.0%}):\n{rows}"
+            )
         parts.append(f"decision: {self.winner}\n  because {self.reason}")
         return "\n\n".join(parts)
 
@@ -96,39 +134,53 @@ def run_comparison(
     Returns:
         The reports and the decision.
     """
-    reports = tuple(
-        evaluate(
-            candidate.name,
-            target,
-            out_of_fold_scores(
-                absolute, target, _learner_for(candidate.factory), n_splits, seed
-            ),
-            archetypes,
-            threshold,
+    reports = []
+    usability: dict[str, float] = {}
+    for candidate in candidates:
+        scores = out_of_fold_scores(
+            absolute, target, _learner_for(candidate.factory), n_splits, seed
         )
-        for candidate in candidates
-    )
-    return decide(reports, candidates)
+        usability[candidate.name] = interior_fraction(scores)
+        reports.append(evaluate(candidate.name, target, scores, archetypes, threshold))
+    return decide(tuple(reports), candidates, usability)
 
 
 def decide(
-    reports: tuple[Report, ...], candidates: tuple[Candidate, ...]
+    reports: tuple[Report, ...],
+    candidates: tuple[Candidate, ...],
+    usability: dict[str, float] | None = None,
 ) -> Comparison:
     """Apply the stated decision rule to measured reports.
 
     A tested function rather than a judgement recorded in prose, so the
     reasoning cannot drift from what was actually applied.
+
+    **Requirements are checked before metrics.** A candidate whose scores
+    cannot form a distribution fails M5's stated criterion and is out of
+    the running, however well it ranks — the same way a model that cannot
+    explain a learner fails M3's. Only survivors are compared.
     """
     by_name = {candidate.name: candidate for candidate in candidates}
+    usability = usability or {}
+    disqualified = {
+        name: (
+            f"only {value:.1%} of learners scored in the interior "
+            f"(floor {MIN_INTERIOR_FRACTION:.0%}); cannot produce the risk "
+            "distribution M5 requires"
+        )
+        for name, value in usability.items()
+        if value < MIN_INTERIOR_FRACTION
+    }
+    eligible = tuple(r for r in reports if r.name not in disqualified) or reports
     undominated = [
         report
-        for report in reports
-        if not any(_dominates(other, report) for other in reports)
+        for report in eligible
+        if not any(_dominates(other, report) for other in eligible)
     ]
 
     if len(undominated) == 1:
         winner = undominated[0]
-        beaten = [r.name for r in reports if r.name != winner.name]
+        beaten = [r.name for r in eligible if r.name != winner.name]
         return Comparison(
             reports=reports,
             winner=winner.name,
@@ -139,6 +191,8 @@ def decide(
                 "on one — a dominating model wins on the evidence"
             ),
             tied=False,
+            usability=usability,
+            disqualified=disqualified,
         )
 
     interpretable = [r for r in undominated if by_name[r.name].interpretable]
@@ -153,7 +207,14 @@ def decide(
         else "no model dominates and none is interpretable; highest mean "
         "per-archetype recall breaks the tie"
     )
-    return Comparison(reports=reports, winner=chosen.name, reason=reason, tied=True)
+    return Comparison(
+        reports=reports,
+        winner=chosen.name,
+        reason=reason,
+        tied=True,
+        usability=usability,
+        disqualified=disqualified,
+    )
 
 
 def _dominates(a: Report, b: Report) -> bool:
@@ -175,7 +236,11 @@ def _mean_reportable_recall(report: Report) -> float:
 
 def candidates() -> tuple[Candidate, ...]:
     """The two models M3 compares."""
-    from ml.src.model import build_gradient_boosting, build_model
+    from ml.src.model import (
+        build_calibrated_gradient_boosting,
+        build_gradient_boosting,
+        build_model,
+    )
 
     return (
         Candidate("logistic regression", build_model, interpretable=True),
@@ -183,5 +248,10 @@ def candidates() -> tuple[Candidate, ...]:
             "gradient boosting",
             build_gradient_boosting,
             interpretable=supports_per_learner_drivers(build_gradient_boosting()),
+        ),
+        Candidate(
+            "gradient boosting (calibrated)",
+            build_calibrated_gradient_boosting,
+            interpretable=False,
         ),
     )

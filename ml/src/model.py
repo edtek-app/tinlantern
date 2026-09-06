@@ -13,6 +13,7 @@ needs. A stronger model has to earn its place against this.
 from __future__ import annotations
 
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -115,4 +116,38 @@ def supports_per_learner_drivers(model: Pipeline) -> bool:
     """
     return "scale" in model.named_steps and hasattr(
         model.named_steps.get("model"), "coef_"
+    )
+
+
+def build_calibrated_gradient_boosting() -> Pipeline:
+    """Gradient boosting with its probabilities calibrated.
+
+    Raw gradient boosting on this cohort emits near-binary scores — 117 of
+    120 learners at 0.0 or 1.0 — which ranks well but cannot produce the
+    risk *distribution* M5's cohort overview requires. Platt scaling
+    (sigmoid) is fitted by internal cross-validation on the training data
+    only, never on the rows being scored, so the same discipline that
+    governs the cohort baseline governs this.
+
+    Sigmoid rather than isotonic: with ~96 learners in a training fold,
+    isotonic regression has too little data and would overfit the
+    calibration itself.
+    """
+    return Pipeline(
+        [
+            (
+                "model",
+                CalibratedClassifierCV(
+                    HistGradientBoostingClassifier(
+                        max_iter=200,
+                        max_depth=3,
+                        learning_rate=0.1,
+                        class_weight="balanced",
+                        random_state=20260301,
+                    ),
+                    method="sigmoid",
+                    cv=3,
+                ),
+            )
+        ]
     )
