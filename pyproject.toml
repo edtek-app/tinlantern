@@ -19,6 +19,7 @@ dependencies = [
     "pyyaml>=6.0",
     "pandas>=2.2",
     "scikit-learn>=1.5",
+    "anthropic>=1.4",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +42,8 @@ dev = [
 packages = [
     "app",
     "app.api",
+    "app.llm",
+    "app.llm.providers",
     "app.raw",
     "app.xapi",
     "ml",
@@ -48,6 +51,12 @@ packages = [
     "pipeline",
     "pipeline.warehouse",
 ]
+
+# Prompts are data, not code: text files loaded by name at runtime
+# (app/llm/prompt_library.py). They must travel with the package or every
+# LLM feature raises on a fresh install.
+[tool.setuptools.package-data]
+"app.llm" = ["prompts/*.md"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

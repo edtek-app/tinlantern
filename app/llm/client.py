@@ -1,0 +1,148 @@
+"""The one seam through which TinLantern talks to a language model.
+
+Every provider call in this repository goes through here (ADR-0001). The
+rule is not tidiness: a second call site is a second place where a
+credential, a model id, a prompt, or an ungrounded answer can enter the
+system without passing the checks this milestone builds.
+
+Three providers, chosen by ``LLM_PROVIDER``:
+
+``stub``
+    Deterministic canned responses, no credentials. This is the provider
+    CI runs. A test that needs an API key is a test CI cannot run.
+``anthropic``
+    The real model, for local development.
+``bedrock``
+    Recognised, not built. Nothing cloud-side exists before M6 and this
+    refuses rather than pretending otherwise.
+
+``LLM_PROVIDER`` has **no default**. Falling back to ``stub`` would let a
+misconfigured deployment answer an advisor with synthetic text that reads
+like analysis; falling back to ``anthropic`` would make CI reach for a
+credential. Neither failure announces itself, so an unset variable is an
+error instead.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
+
+#: Prefixed to every stub response. A canned answer that escapes into a
+#: report, a screenshot, or an eval artifact must declare what it is on
+#: sight — provenance you have to go and check is provenance nobody checks.
+SYNTHETIC_MARKER = "[SYNTHETIC — TinLantern stub provider; no model was called]"
+
+#: The providers this codebase knows by name. `bedrock` is listed because
+#: it is planned (`.env.example`), so asking for it gets "not until M6"
+#: rather than the misleading "unknown provider".
+PROVIDERS: tuple[str, ...] = ("stub", "anthropic", "bedrock")
+
+
+class LLMError(RuntimeError):
+    """Base for every failure originating in the LLM layer."""
+
+
+class UnknownProvider(LLMError):
+    """``LLM_PROVIDER`` names something this codebase does not implement."""
+
+
+class ProviderNotAvailable(LLMError):
+    """A known provider that cannot be used in this milestone."""
+
+
+class UnregisteredPrompt(LLMError):
+    """The stub was asked something it has no canned response for."""
+
+
+class ModelRefused(LLMError):
+    """The model declined the request.
+
+    A refusal arrives as a successful HTTP response whose content is
+    empty, so it must be checked explicitly — otherwise it surfaces as a
+    confidently blank summary rather than as a failure.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class Completion:
+    """One model response, with enough provenance to audit it later.
+
+    Attributes:
+        text: The response body.
+        provider: Which provider produced it.
+        model: The model identifier the provider reported.
+        synthetic: True when no model was called. Carried as a field, not
+            inferred from the provider name, so a consumer writing an
+            eval artifact can gate on it mechanically.
+    """
+
+    text: str
+    provider: str
+    model: str
+    synthetic: bool
+
+
+@runtime_checkable
+class Provider(Protocol):
+    """What every provider implements. Deliberately one method wide."""
+
+    name: str
+
+    def complete(self, *, system: str, prompt: str) -> Completion:
+        """Return a completion for ``prompt`` under the ``system`` stance."""
+        ...
+
+
+_UNSET = (
+    "LLM_PROVIDER is not set. It has no default on purpose: defaulting to "
+    "'stub' would let a deployment answer an advisor with synthetic text, "
+    "and defaulting to 'anthropic' would make CI reach for a credential. "
+    f"Set one of {list(PROVIDERS)} — see .env.example."
+)
+
+_BEDROCK = (
+    "provider 'bedrock' is planned but not built. Nothing cloud-side "
+    "exists before M6 (CLAUDE.md's local-first rule), so this refuses "
+    "rather than failing later against absent infrastructure. Use "
+    "'anthropic' locally or 'stub' in tests."
+)
+
+
+def build_client(provider: str | None = None) -> Provider:
+    """Construct the provider named by ``LLM_PROVIDER``.
+
+    Args:
+        provider: Overrides the environment. For tests and for the eval
+            harness, which selects its provider explicitly.
+
+    Returns:
+        A ready provider. Construction never performs a network call, so
+        an unreachable or unconfigured backend surfaces at the point of
+        use rather than at import.
+
+    Raises:
+        UnknownProvider: If the name is not one of ``PROVIDERS``.
+        ProviderNotAvailable: If the provider is known but not yet built.
+    """
+    name = provider if provider is not None else os.environ.get("LLM_PROVIDER")
+    if not name:
+        raise UnknownProvider(_UNSET)
+
+    if name == "stub":
+        from app.llm.providers.stub import StubProvider
+
+        return StubProvider()
+
+    if name == "anthropic":
+        from app.llm.providers.anthropic import AnthropicProvider
+
+        return AnthropicProvider()
+
+    if name == "bedrock":
+        raise ProviderNotAvailable(_BEDROCK)
+
+    raise UnknownProvider(
+        f"unknown LLM_PROVIDER {name!r}. Known providers: {list(PROVIDERS)}."
+    )

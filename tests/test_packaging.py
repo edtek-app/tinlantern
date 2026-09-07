@@ -71,4 +71,17 @@ def test_application_packages_are_listed_explicitly() -> None:
     packages = _packages()
     assert "app" in packages
     assert "app.xapi" in packages
+    assert "app.llm" in packages, "the LLM client is application code"
     assert "ml.src" in packages, "promoted model code must ship"
+
+
+def test_prompts_travel_with_the_package() -> None:
+    """Prompts are data files loaded by name, so they need declaring.
+
+    Listing `app.llm` ships the modules; without a package-data entry the
+    `prompts/` directory is left behind and every LLM feature raises on a
+    fresh install — a failure that never appears in a source checkout.
+    """
+    config = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+    patterns = config["tool"]["setuptools"]["package-data"]["app.llm"]
+    assert any(pattern.startswith("prompts/") for pattern in patterns)
