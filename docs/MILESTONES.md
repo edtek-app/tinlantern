@@ -12,8 +12,9 @@ The bump lands as its own `ci:` commit before any of the milestone's code,
 so the first feature commit is already validated by the new gate. Folded
 into a feature task it is the kind of step that silently does not happen.
 
-**Closing a milestone regenerates its reports** (`make report`) before the
-tag. Reports in `evals/reports/` are committed artifacts quoted elsewhere;
+**Closing a milestone regenerates its reports** (`make report`, and from
+M4 also `make evals` against the real provider) before the tag. Reports in
+`evals/reports/` are committed artifacts quoted elsewhere;
 each carries a provenance header naming the commit and row counts it was
 computed from, so a stale one declares itself — but only if someone looks.
 Regenerating at close means a report never drifts silently across a
@@ -123,8 +124,16 @@ model beats trivial baseline on held-out cohort.
       citations to the underlying data
 - [ ] Eval harness in `evals/`: golden-question set, groundedness checks,
       refusal-on-unanswerable checks; results versioned in `evals/reports/`
-**Gate:** `make gate-m4` — client contract tests (mocked); eval harness runs;
-groundedness score above documented threshold.
+- [ ] **A committed eval run against the REAL provider.** The gate runs
+      the golden set against `stub`, which keeps CI fast and
+      credential-free but means a green gate proves only that the harness
+      works. `make evals` runs the same set against `anthropic` and writes
+      to `evals/reports/` with a provenance header, and closing the
+      milestone runs it. Without this criterion, a suite that has only
+      ever seen canned responses would pass every check while measuring
+      nothing about the model
+**Gate:** `make gate-m4` — client contract tests (stub provider); eval
+harness runs; groundedness score above documented threshold.
 **Owner review:** prompts in version control; ADR on grounding strategy;
 failure modes documented.
 
