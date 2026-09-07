@@ -173,3 +173,123 @@ committed real-provider eval run is an M4 acceptance criterion.
   fighting the model rather than constraining it; M5 finds that advisors
   want the argument, not the claims, which would put the
   collectively-misleading gap on the critical path.
+
+---
+
+# Addendum: citations for natural-language Q&A
+
+Status: Accepted. Added with the Q&A layer.
+
+Q&A grounds against **returned query rows** rather than a curated fact
+set, but it is the same mechanism, not a second one: the model returns
+claims, each naming its source, and code checks each claim against the
+thing it named. Only the source changes — a row label instead of a fact
+key. A separate ADR would have split one strategy across two records.
+
+**Citations are positional row labels** (`row:0`, `row:1`), not primary
+keys. Most of what an advisor asks is an aggregate, and an aggregate has
+no key to cite; a scheme that only worked for row-level queries would
+push the model toward citing nothing on exactly the questions people ask
+most. The rows and **the executed SQL** are both retained on the result,
+so a dashboard can show what was run beside what was cited, and an eval
+artifact records how an answer was reached rather than only that it was
+grounded.
+
+**A claim is checked against the row it named, not the result set.** A
+claim citing one learner while quoting another's score reads perfectly
+and is wrong; grounding against every returned row would accept it.
+Checking the cited row specifically is what makes the citation mean
+something rather than decorate the sentence.
+
+## The database is the boundary; the Python check is not
+
+Generated SQL runs behind two independent database protections:
+
+1. **`tinlantern_readonly`** (migration `0006`) — SELECT on `warehouse`,
+   nothing else, and no access to `raw` at all.
+2. **A read-only transaction** for the duration of the query.
+
+**Why `NOLOGIN` + `SET LOCAL ROLE` rather than a separate login role and
+a second connection URL.** A reviewer will ask, because a second
+connection is the more familiar shape. The privilege enforcement is
+identical — PostgreSQL checks the current role, however it was reached —
+but a login role needs a password, which means either a secret in the
+repository or a second credential to distribute and rotate, against a
+project rule that says neither. The threat being defended against is
+**generated SQL doing something it should not**, and `SET LOCAL ROLE`
+answers that completely. It does not defend against our own connection
+pool being compromised; neither would a second URL held by the same
+process. Buying nothing for the cost of a credential is the wrong trade.
+
+`SET LOCAL` (not `SET`) for both settings, so they revert when the
+surrounding transaction ends and a pooled connection that once answered
+a question does not silently refuse writes for whatever uses it next.
+That revert is asserted across two real transactions with a **commit**
+between them — a rollback reverts a session-level `SET` too, so a test
+that rolls back cannot tell the two apart, and the first version of that
+test passed with the boundary deliberately broken.
+
+Each refuses an INSERT, an UPDATE, and a DROP **with the other absent**,
+and the tests assert that separately — two layers only ever tested
+together are one layer with extra steps. A further test calls the
+executor directly with a write statement, bypassing the Python check
+entirely, because that is the arrangement's actual claim.
+
+**`statement_problem` in `app/llm/query.py` is a fast-fail convenience
+and is NOT the security boundary.** It turns "the model returned prose,
+or a write, or two statements" into a clear, retryable rejection instead
+of an opaque database error. It is pattern matching over text and it is
+wrong in ways nobody predicts. **No database protection may ever be
+removed on the grounds that the SQL is validated** — the role's own
+`COMMENT ON ROLE` says so too, where a DBA reading `\du` will see it.
+
+## The schema description is curated, and its drift is tested
+
+The model plans against a hand-written description
+(`app/llm/schema_context.py`), not `information_schema`. Introspection
+would supply every column name for free and stay current by itself, but
+it cannot convey the one thing this schema most needs said: **ADR-0006
+made `fact_activity` and `fact_assessment` overlap on purpose**, an
+assessment statement produces a row in both, and summing across them
+double counts. That ADR named this exact situation — "M4's generated SQL
+is observed summing across both facts" — as its own revisit trigger, on
+the grounds that it would mean the table comments were not doing their
+job. A description the model reads *before* it writes SQL is the earlier
+place to say it, and generated SQL never sees a `COMMENT ON TABLE`.
+
+Curation's cost is drift, so drift is asserted against the live schema in
+both directions. The direction that matters is **undescribed**: a table
+or column the database has and the description omits becomes silently
+wrong SQL, because a model that guesses at what it was not told about
+writes plausible nonsense. A described column that no longer exists fails
+loudly the first time it is used, which is the safer failure. Pipeline
+bookkeeping tables are described as **excluded rather than omitted** —
+silently leaving `etl_rejections` out invites a guess; naming it as
+off-limits forecloses one.
+
+## No fallback here, unlike advisor summaries
+
+A summary has a curated fact set that code can always render into
+grounded prose, which is why its failure mode is a template. An arbitrary
+question has no such thing. So when the warehouse cannot answer a
+question — or when an answer fails verification — Q&A **refuses and says
+what is missing**. Showing an unverified answer with a caveat attached
+would be precisely the failure this ADR exists to prevent, wearing a
+disclaimer; and a question about attendance answered with a real number
+from a different quantity is undetectable by the person reading it.
+
+## Additional failure modes
+
+- **The plan step is only as good as the description.** A question the
+  warehouse *could* answer may be refused because the description does
+  not make the path obvious. That direction is safe but invisible — a
+  refusal rate against real questions is worth watching in the eval
+  harness.
+- **A grounded claim can still answer the wrong question.** Every figure
+  can trace to the cited row while the SQL measured something other than
+  what was asked. Nothing here checks that the query matches the
+  question's intent; that is the same collectively-misleading gap named
+  above, arriving one step earlier.
+- **Truncation is reported, not prevented.** Past `MAX_ROWS` the answer
+  layer is told the rows are incomplete and instructed not to total them,
+  which is an instruction rather than a mechanism.
