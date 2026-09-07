@@ -94,6 +94,18 @@ class Provider(Protocol):
         """Return a completion for ``prompt`` under the ``system`` stance."""
         ...
 
+    def complete_json(
+        self, *, system: str, prompt: str, schema: dict
+    ) -> tuple[dict, Completion]:
+        """Return a completion constrained to ``schema``, parsed.
+
+        The grounded features do not want prose from the model — they
+        want claims each carrying the fact they rest on, so that code can
+        check them (ADR-0008). Both halves come back: the parsed payload
+        to verify, and the raw completion for provenance.
+        """
+        ...
+
 
 _UNSET = (
     "LLM_PROVIDER is not set. It has no default on purpose: defaulting to "

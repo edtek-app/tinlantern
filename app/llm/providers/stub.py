@@ -24,6 +24,7 @@ answer whose provenance is ambiguous is worse than no answer.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import ClassVar
@@ -117,3 +118,18 @@ class StubProvider:
             model=STUB_MODEL,
             synthetic=True,
         )
+
+    def complete_json(
+        self, *, system: str, prompt: str, schema: dict
+    ) -> tuple[dict, Completion]:
+        """Parse the canned response as JSON.
+
+        The schema is accepted and ignored: a canned response is written
+        by hand against the same schema the real provider is constrained
+        to, so validating it here would only re-check the fixture. What
+        the caller actually needs proved — that the payload's claims rest
+        on supplied facts — is verification's job, not the provider's.
+        """
+        completion = self.complete(system=system, prompt=prompt)
+        body = completion.text.removeprefix(SYNTHETIC_MARKER).strip()
+        return json.loads(body), completion

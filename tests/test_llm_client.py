@@ -118,6 +118,34 @@ def test_stub_output_is_identifiably_synthetic() -> None:
     assert "SYNTHETIC" in completion.text
 
 
+def test_the_stub_parses_a_canned_json_response() -> None:
+    """Structured requests come back parsed, with the completion beside them.
+
+    The schema is accepted and ignored by the stub: a canned response is
+    written by hand against the same schema the real provider is
+    constrained to, so validating it here would only re-check the
+    fixture. The caller still gets the completion, because provenance
+    has to survive the parse.
+    """
+    provider = StubProvider(canned(SYSTEM, PROMPT, '{"alerted": 38}'))
+
+    payload, completion = provider.complete_json(
+        system=SYSTEM, prompt=PROMPT, schema={"type": "object"}
+    )
+
+    assert payload == {"alerted": 38}
+    assert completion.synthetic is True
+    assert completion.text.startswith(SYNTHETIC_MARKER)
+
+
+def test_a_structured_request_raises_when_unregistered_too() -> None:
+    """The raising contract is not weaker on the JSON path."""
+    with pytest.raises(UnregisteredPrompt):
+        StubProvider({}).complete_json(
+            system=SYSTEM, prompt=PROMPT, schema={"type": "object"}
+        )
+
+
 # --------------------------------------------------------------------------
 # Provider selection
 # --------------------------------------------------------------------------

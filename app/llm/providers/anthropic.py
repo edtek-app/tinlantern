@@ -20,6 +20,7 @@ is not an exception at all — see below.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, ClassVar
@@ -56,7 +57,26 @@ class AnthropicProvider:
 
         return anthropic.Anthropic()
 
-    def complete(self, *, system: str, prompt: str) -> Completion:
+    def complete_json(
+        self, *, system: str, prompt: str, schema: dict
+    ) -> tuple[dict, Completion]:
+        """Constrain the response to ``schema`` and parse it.
+
+        Structured output rather than "reply in JSON" in the prompt: a
+        prompt-level request is a preference the model can decline under
+        pressure, and a summariser that falls back to a template because
+        the JSON did not parse would blame the wrong layer.
+        """
+        completion = self.complete(
+            system=system,
+            prompt=prompt,
+            output_config={"format": {"type": "json_schema", "schema": schema}},
+        )
+        return json.loads(completion.text), completion
+
+    def complete(
+        self, *, system: str, prompt: str, output_config: dict | None = None
+    ) -> Completion:
         """Send one request and return its text.
 
         Adaptive thinking is on: grounding an answer in supplied rows and
@@ -74,6 +94,7 @@ class AnthropicProvider:
             thinking={"type": "adaptive"},
             system=system,
             messages=[{"role": "user", "content": prompt}],
+            **({"output_config": output_config} if output_config else {}),
         )
 
         if response.stop_reason == "refusal":
