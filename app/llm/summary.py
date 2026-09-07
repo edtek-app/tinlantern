@@ -30,9 +30,7 @@ serving templates half the time cannot look healthy.
 
 from __future__ import annotations
 
-import math
-import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
@@ -43,6 +41,7 @@ from app.llm.client import (
     Provider,
     ProviderNotAvailable,
 )
+from app.llm.grounding import numbers_in, ungrounded
 from app.llm.prompt_library import load_prompt
 
 #: Opens every fallback summary. Visible, because the difference between
@@ -68,8 +67,6 @@ FORBIDDEN_DECOMPOSITION: tuple[str, ...] = (
     "breakdown of the score",
     "of the total risk",
 )
-
-_NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
 class FallbackReason(StrEnum):
@@ -219,47 +216,16 @@ SUMMARY_SCHEMA: dict = {
 }
 
 
-def _scrub_identifiers(text: str, facts: LearnerFacts) -> str:
-    """Remove the literals whose digits are not quantities.
-
-    An opaque account id (`s-00417`), a git short SHA, and the window
-    date are facts, but their digits are not figures an advisor could
-    be misled by. Removing the exact supplied literals — and only those —
-    keeps a *different* date or identifier visible to the check.
-    """
-    for literal in (
-        facts.learner,
-        facts.model_version,
-        facts.window_close.isoformat(),
-    ):
-        text = text.replace(literal, " ")
-    return text
-
-
-def _numbers_in(text: str) -> list[float]:
-    return [float(match) for match in _NUMBER.findall(text)]
-
-
-def _is_allowed(value: float, allowed: Iterable[float]) -> bool:
-    """Whether a number in generated text traces to a supplied fact.
-
-    Percentages count: an advisor summary saying "82%" of a risk of 0.82
-    is the same fact in the register a reader expects, not an invention.
-    """
-    for permitted in allowed:
-        if math.isclose(value, permitted, abs_tol=0.005):
-            return True
-        if math.isclose(value, permitted * 100, abs_tol=0.5):
-            return True
-    return False
-
-
 def ungrounded_numbers(text: str, facts: LearnerFacts) -> tuple[float, ...]:
-    """Numbers in ``text`` that trace to nothing supplied."""
-    allowed = facts.allowed_numbers()
-    scrubbed = _scrub_identifiers(text, facts)
-    return tuple(
-        value for value in _numbers_in(scrubbed) if not _is_allowed(value, allowed)
+    """Numbers in ``text`` that trace to nothing this learner supplied.
+
+    The identifier, the model version, and the window date are scrubbed
+    first: they are facts, but their digits are not quantities.
+    """
+    return ungrounded(
+        text,
+        facts.allowed_numbers(),
+        scrub=(facts.learner, facts.model_version, facts.window_close.isoformat()),
     )
 
 
@@ -318,7 +284,7 @@ def verify(payload: dict, facts: LearnerFacts) -> tuple[str, ...]:
             )
 
     step = payload.get("suggested_next_step", "")
-    if _numbers_in(step):
+    if numbers_in(step):
         problems.append(
             "the suggested next step contains a figure. It is advice, not "
             "a claim, so it carries no citation and nothing can check it — "
