@@ -121,6 +121,11 @@ def render(
         "hand-written reference query computes — not merely that every "
         "claim cited a returned row.",
         "",
+        f"- Malformed responses: **{metrics.malformed}**. A structured "
+        "response that would not parse — neither a refusal nor a "
+        "verification failure, and not retried, so this is a failure rate "
+        "and not a retry rate.",
+        "",
         "Refusal and answer accuracy are reported separately on purpose. "
         "Combined, they hide the trade: a system that refuses everything "
         "scores perfectly on one and is useless.",

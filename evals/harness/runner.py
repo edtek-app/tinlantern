@@ -24,7 +24,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import Connection, text
 
-from app.llm.client import Provider
+from app.llm.client import MalformedResponse, Provider
 from app.llm.grounding import numbers_in, traces_to
 from app.llm.qa import Answer, ask
 from evals.harness.golden import GoldenQuestion
@@ -47,9 +47,12 @@ class Outcome:
     truth: object | None
     passed: bool
     problems: tuple[str, ...]
+    malformed: bool = False
 
     @property
     def observed(self) -> str:
+        if self.malformed:
+            return "malformed"
         return "answered" if self.answer.answered else "refused"
 
 
@@ -135,13 +138,43 @@ def grade(
 def run_question(
     question: GoldenQuestion, connection: Connection, provider: Provider
 ) -> Outcome:
-    """Ask one golden question and grade the result."""
-    answer = ask(question.question, connection, provider)
+    """Ask one golden question and grade the result.
+
+    A malformed response is graded as its own outcome rather than
+    raised. It is a real property of the system being measured — not a
+    refusal and not a verification failure — and a harness that aborted
+    on it would let one bad response in one run destroy the whole
+    measurement. One bad response costs one question in one run.
+
+    Its rate is reported. It is NOT retried: a retry rate and a failure
+    rate are different measurements, and retry policy belongs to the
+    caller (ADR-0008), not to the thing measuring the caller's system.
+    """
     truth = (
         reference_value(connection, question.reference_sql)
         if question.reference_sql
         else None
     )
+    try:
+        answer = ask(question.question, connection, provider)
+    except MalformedResponse as broken:
+        return Outcome(
+            question=question,
+            answer=Answer(
+                text="",
+                answered=False,
+                refusal_reason="malformed response",
+                problems=(str(broken),),
+            ),
+            truth=truth,
+            passed=False,
+            problems=(
+                f"the model's structured response could not be parsed: "
+                f"{broken}. stop_reason={broken.stop_reason!r}. Raw text: "
+                f"{broken.raw[:300]!r}",
+            ),
+            malformed=True,
+        )
     return grade(question, answer, truth)
 
 
@@ -170,6 +203,7 @@ class Metrics:
     refusals_correct: int
     answers_expected: int
     answers_correct: int
+    malformed: int
     synthetic: bool
 
     @property
@@ -188,5 +222,6 @@ def measure(outcomes: tuple[Outcome, ...]) -> Metrics:
         refusals_correct=sum(1 for item in refusals if item.passed),
         answers_expected=len(answers),
         answers_correct=sum(1 for item in answers if item.passed),
+        malformed=sum(1 for item in outcomes if item.malformed),
         synthetic=all(item.answer.synthetic for item in outcomes) if outcomes else True,
     )

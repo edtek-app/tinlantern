@@ -701,6 +701,208 @@ def test_make_evals_refuses_the_stub_before_running(
     assert "refusing to run" in capsys.readouterr().err
 
 
+# --------------------------------------------------------------------------
+# Malformed responses — their own outcome, and they must not abort a run
+# --------------------------------------------------------------------------
+
+
+class Malforming:
+    """A provider whose structured response will not parse."""
+
+    name = "malforming"
+
+    def complete(self, *, system: str, prompt: str):
+        raise AssertionError("not used")
+
+    def complete_json(self, *, system: str, prompt: str, schema: dict):
+        from app.llm.client import MalformedResponse
+
+        raise MalformedResponse(
+            "not valid JSON",
+            raw='{"answerable": true, "sql": "SELECT',
+            stop_reason="end_turn",
+            prompt=prompt,
+        )
+
+
+def test_a_malformed_response_is_graded_not_raised(connection: Connection) -> None:
+    """One bad response costs one question in one run, not the run.
+
+    A variance harness that aborts on the variance it exists to measure
+    is the defect, not the transient — this exact fault killed all five
+    runs of an earlier attempt at the measurement and produced no data.
+    """
+    from evals.harness.runner import run_question
+
+    outcome = run_question(a_question(), connection, Malforming())
+
+    assert outcome.malformed is True
+    assert outcome.passed is False
+    assert outcome.observed == "malformed", (
+        "a malformed response is neither a refusal nor a verification "
+        "failure, and folding it into either would hide its rate"
+    )
+
+
+def test_a_malformed_response_carries_what_it_was(connection: Connection) -> None:
+    """The raw text and stop reason travel with the failure.
+
+    Diagnosing the first occurrence cost 21 API calls to reconstruct
+    what a decent error would have said immediately.
+    """
+    from evals.harness.runner import run_question
+
+    outcome = run_question(a_question(), connection, Malforming())
+
+    joined = " ".join(outcome.problems)
+    assert "SELECT" in joined, "the raw text must be recoverable"
+    assert "end_turn" in joined, "the stop reason distinguishes truncation"
+
+
+def test_the_run_continues_past_a_malformed_response(
+    connection: Connection,
+) -> None:
+    """The whole point of grading it rather than raising."""
+    from evals.harness.runner import measure, run_all
+
+    questions = (a_question(id="a"), a_question(id="b"))
+
+    outcomes = run_all(questions, connection, Malforming())
+    metrics = measure(outcomes)
+
+    assert len(outcomes) == 2, "both questions were asked"
+    assert metrics.malformed == 2
+    assert metrics.passed == 0
+
+
+# --------------------------------------------------------------------------
+# Variance aggregation — mechanics in the gate, the measurement is `make
+# evals-variance` against a real provider
+# --------------------------------------------------------------------------
+
+
+def an_outcome(passed: bool, sql: str | None):
+    """One graded result, with the query that produced it."""
+    from app.llm.qa import Answer
+    from app.llm.query import QueryResult
+
+    query = QueryResult(sql=sql, columns=(), rows=(), truncated=False) if sql else None
+    return grade(
+        a_question(),
+        Answer(
+            text="There are 3 learners." if passed else "There are 91 learners.",
+            answered=True,
+            synthetic=True,
+            query=query,
+        ),
+        truth=3,
+    )
+
+
+def test_variance_reports_each_runs_outcome_not_an_aggregate() -> None:
+    """A question passing 3 of 5 must read as 3 of 5.
+
+    The per-run flags are stored rather than derived, so the summary
+    cannot drift from the detail table beneath it.
+    """
+    from evals.harness.variance import collect, summarise
+
+    runs = (
+        (an_outcome(True, "A"),),
+        (an_outcome(False, "B"),),
+        (an_outcome(True, "A"),),
+    )
+    variances = collect(runs)
+
+    assert variances[0].passed_in == (True, False, True)
+    assert variances[0].passes == 2
+    assert variances[0].runs == 3
+    assert summarise(variances, 3).range_text == "0-1 of 1"
+
+
+def test_sql_stability_is_reported_even_when_the_outcome_never_varies() -> None:
+    """The finding a pass rate would hide entirely.
+
+    A question passing five times from five different queries is passing
+    by luck. Without this it appears in the table as an unbroken row of
+    ticks, indistinguishable from one whose query is settled.
+    """
+    from evals.harness.variance import collect
+
+    lucky = collect(
+        ((an_outcome(True, "A"),), (an_outcome(True, "B"),), (an_outcome(True, "C"),))
+    )[0]
+    settled = collect(
+        ((an_outcome(True, "A"),), (an_outcome(True, "A"),), (an_outcome(True, "A"),))
+    )[0]
+
+    assert lucky.stable_outcome and settled.stable_outcome, "both always pass"
+    assert lucky.stable_sql is False, "three distinct queries is not stable"
+    assert settled.stable_sql is True
+    assert len(lucky.distinct_queries) == 3
+
+
+def test_the_headline_is_a_range_not_a_point() -> None:
+    """A point estimate is what made highest-risk look decided.
+
+    It read as a settled pass or fail in each of four consecutive
+    reports while actually flipping every time.
+    """
+    from evals.harness.variance import collect, summarise
+
+    variances = collect(
+        (
+            (an_outcome(True, "A"), an_outcome(True, "A")),
+            (an_outcome(False, "B"), an_outcome(True, "A")),
+        )
+    )
+    summary = summarise(variances, 2)
+
+    assert summary.worst == 1 and summary.best == 2
+    assert summary.range_text == "1-2 of 2"
+
+
+def test_the_variance_report_states_the_malformed_rate() -> None:
+    """Reported even at zero, because the fault is known to exist."""
+    from evals.harness.report import collect_provenance
+    from evals.harness.variance import collect, summarise
+    from evals.harness.variance_report import render as render_variance
+
+    variances = collect(((an_outcome(True, "A"),), (an_outcome(True, "A"),)))
+    body = render_variance(
+        variances, summarise(variances, 2), collect_provenance("stub", "s", 1)
+    )
+
+    assert "Malformed responses:" in body
+    assert "failure rate" in body, "it must not read as a retry rate"
+
+
+def test_the_variance_report_shows_both_queries_not_a_claim_they_differ() -> None:
+    """The hypothesis is about query shape, so the SQL is the evidence.
+
+    A failure traced to a column present in one run and absent in
+    another has to be checkable on the page.
+    """
+    from evals.harness.report import collect_provenance
+    from evals.harness.variance import collect, summarise
+    from evals.harness.variance_report import render as render_variance
+
+    variances = collect(
+        (
+            (an_outcome(True, "SELECT a FROM t"),),
+            (an_outcome(False, "SELECT b FROM t"),),
+        )
+    )
+    body = render_variance(
+        variances, summarise(variances, 2), collect_provenance("stub", "s", 1)
+    )
+
+    assert "SELECT a FROM t" in body
+    assert "SELECT b FROM t" in body
+    assert "same author" in body, "the self-authorship limit travels with it"
+    assert "four different instruments" in body, "runs 1-4 exclusion must be stated"
+
+
 def test_the_harness_is_never_in_the_deployment_manifest() -> None:
     """`evals` stays importable from the root and unlisted (ADR-0002)."""
     import tomllib

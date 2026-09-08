@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 from app.db import transaction
 from app.llm.client import build_client
@@ -21,6 +22,52 @@ from evals.harness.report import (
     write,
 )
 from evals.harness.runner import measure, run_all
+from evals.harness.variance import collect, run_repeatedly, summarise
+from evals.harness.variance_report import DEFAULT_PATH as VARIANCE_PATH
+from evals.harness.variance_report import render as render_variance
+
+_STUB_REFUSAL = (
+    "refusing to run against the stub provider. Canned responses measure "
+    "this harness, not the model, and M4 requires a committed eval run "
+    "against a real one. The gate already runs the golden set against the "
+    "stub.\nSet LLM_PROVIDER=anthropic (see .env.example)."
+)
+
+
+def variance(runs: int) -> int:
+    """Run the golden set ``runs`` times and write the variance report.
+
+    A separate artifact and a separate command: it answers "how much
+    does this move", which a single run cannot, and it costs `runs`
+    times as much to produce.
+    """
+    questions = load()
+    provider = build_client()
+    model = getattr(provider, "model", provider.name)
+
+    if provider.name == "stub":
+        print(_STUB_REFUSAL, file=sys.stderr)
+        return 2
+
+    with transaction() as connection:
+        by_run = run_repeatedly(questions, connection, provider, runs)
+
+    variances = collect(by_run)
+    summary = summarise(variances, runs)
+    provenance = collect_provenance(
+        provider.name, model, len(questions), ignore=(VARIANCE_PATH,)
+    )
+    Path(VARIANCE_PATH).write_text(
+        render_variance(variances, summary, provenance), encoding="utf-8"
+    )
+
+    print(f"{summary.range_text} across {runs} runs")
+    print(
+        f"outcome stable {summary.outcome_stable}/{summary.total}, "
+        f"SQL stable {summary.sql_stable}/{summary.total}"
+    )
+    print(f"wrote {VARIANCE_PATH}")
+    return 0
 
 
 def main() -> int:
@@ -35,14 +82,7 @@ def main() -> int:
     # `write` refuses a synthetic run too; that stays as the mechanical
     # backstop for any other path into it.
     if provider.name == "stub":
-        print(
-            "refusing to run `make evals` against the stub provider. Canned "
-            "responses measure this harness, not the model, and M4 requires "
-            "a committed eval run against a real one. The gate already runs "
-            "the golden set against the stub.\n"
-            "Set LLM_PROVIDER=anthropic (see .env.example).",
-            file=sys.stderr,
-        )
+        print(_STUB_REFUSAL, file=sys.stderr)
         return 2
 
     with transaction() as connection:
@@ -70,4 +110,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     os.environ.setdefault("LLM_PROVIDER", "anthropic")
+    if "--runs" in sys.argv:
+        raise SystemExit(variance(int(sys.argv[sys.argv.index("--runs") + 1])))
     raise SystemExit(main())

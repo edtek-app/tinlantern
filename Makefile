@@ -1,4 +1,4 @@
-.PHONY: setup migrate db-reset seed ingest etl dq report score evals lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
+.PHONY: setup migrate db-reset seed ingest etl dq report score evals evals-variance lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
 
 # Local development default. Export DATABASE_URL to override (see .env.example).
 # The driver must be psycopg v3 — `postgresql://` alone resolves to psycopg2,
@@ -69,6 +69,12 @@ score:
 # about the model. A synthetic run is REFUSED rather than written.
 evals:
 	python -m evals
+
+# How much the golden set moves between runs. Five runs of eighteen
+# questions against the real provider — its own artifact, because a
+# single run cannot answer it.
+evals-variance:
+	python -m evals --runs 5
 
 lint:
 	ruff check . && ruff format --check .

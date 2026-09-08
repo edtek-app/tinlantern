@@ -32,6 +32,7 @@ from typing import ClassVar
 from app.llm.client import (
     SYNTHETIC_MARKER,
     Completion,
+    MalformedResponse,
     UnregisteredPrompt,
 )
 
@@ -132,4 +133,15 @@ class StubProvider:
         """
         completion = self.complete(system=system, prompt=prompt)
         body = completion.text.removeprefix(SYNTHETIC_MARKER).strip()
-        return json.loads(body), completion
+        try:
+            return json.loads(body), completion
+        except json.JSONDecodeError as broken:
+            # Same error type as the real provider, so a caller handling
+            # a malformed response is exercised by the stub rather than
+            # only in production.
+            raise MalformedResponse(
+                f"the canned response is not valid JSON ({broken})",
+                raw=body,
+                stop_reason=None,
+                prompt=prompt,
+            ) from broken

@@ -56,6 +56,24 @@ class UnregisteredPrompt(LLMError):
     """The stub was asked something it has no canned response for."""
 
 
+class MalformedResponse(LLMError):
+    """The model's structured response could not be parsed.
+
+    Carries the raw text, the stop reason, and the prompt that produced
+    it. A bare ``JSONDecodeError`` with a character offset cost 21 API
+    calls to diagnose once — the same defect as an eval report saying
+    only "could not be verified".
+    """
+
+    def __init__(
+        self, detail: str, *, raw: str, stop_reason: str | None, prompt: str
+    ) -> None:
+        super().__init__(detail)
+        self.raw = raw
+        self.stop_reason = stop_reason
+        self.prompt = prompt
+
+
 class ModelRefused(LLMError):
     """The model declined the request.
 

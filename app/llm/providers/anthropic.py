@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, ClassVar
 
-from app.llm.client import Completion, ModelRefused
+from app.llm.client import Completion, MalformedResponse, ModelRefused
 
 #: Opus 5. Named here rather than at call sites so the model in use is one
 #: grep away and one line to change.
@@ -67,17 +67,57 @@ class AnthropicProvider:
         pressure, and a summariser that falls back to a template because
         the JSON did not parse would blame the wrong layer.
         """
-        completion = self.complete(
+        completion, stop_reason = self._complete(
             system=system,
             prompt=prompt,
             output_config={"format": {"type": "json_schema", "schema": schema}},
         )
-        return json.loads(completion.text), completion
+
+        if stop_reason == "max_tokens":
+            raise MalformedResponse(
+                "the response hit max_tokens and is truncated, so the JSON "
+                f"is incomplete (max_tokens={MAX_TOKENS}). Adaptive thinking "
+                "shares this budget, so a long reasoning pass can leave too "
+                "little room for the answer.",
+                raw=completion.text,
+                stop_reason=stop_reason,
+                prompt=prompt,
+            )
+
+        try:
+            return json.loads(completion.text), completion
+        except json.JSONDecodeError as broken:
+            # Structured output is supposed to guarantee valid JSON, so
+            # reaching here means something transient. Whatever it was,
+            # the next person should be able to see it without spending
+            # a day of API calls reconstructing it.
+            raise MalformedResponse(
+                f"the response was not valid JSON ({broken}). Structured "
+                "output should guarantee it, so this is a transient the "
+                "raw text below is the only record of.",
+                raw=completion.text,
+                stop_reason=stop_reason,
+                prompt=prompt,
+            ) from broken
 
     def complete(
         self, *, system: str, prompt: str, output_config: dict | None = None
     ) -> Completion:
-        """Send one request and return its text.
+        """Send one request and return its text."""
+        completion, _ = self._complete(
+            system=system, prompt=prompt, output_config=output_config
+        )
+        return completion
+
+    def _complete(
+        self, *, system: str, prompt: str, output_config: dict | None = None
+    ) -> tuple[Completion, str | None]:
+        """Send one request; return the completion and its stop reason.
+
+        The stop reason is handed back rather than discarded because the
+        JSON path needs it: a truncated response and a transient
+        malformation are different faults with different fixes, and the
+        text alone cannot tell them apart.
 
         Adaptive thinking is on: grounding an answer in supplied rows and
         deciding whether the rows actually support it is the kind of work
@@ -106,9 +146,12 @@ class AnthropicProvider:
             )
 
         text = "".join(block.text for block in response.content if block.type == "text")
-        return Completion(
-            text=text,
-            provider=self.name,
-            model=response.model,
-            synthetic=False,
+        return (
+            Completion(
+                text=text,
+                provider=self.name,
+                model=response.model,
+                synthetic=False,
+            ),
+            response.stop_reason,
         )
