@@ -37,8 +37,9 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
+from app.api import schemas
+from app.api.schemas import Question
 from app.dashboard.queries import learner_detail
 from app.dashboard.summaries import read
 from app.dashboard.telemetry import Outcome, record, timed
@@ -58,18 +59,12 @@ router = APIRouter(prefix="/api", tags=["insights"])
 MAX_ATTEMPTS = 2
 
 
-class Question(BaseModel):
-    """A natural-language question about the cohort."""
-
-    question: str
-
-
 def _provider() -> Provider:
     """The configured provider. Overridden in tests by dependency override."""
     return build_client()
 
 
-@router.get("/learners/{identifier}/summary")
+@router.get("/learners/{identifier}/summary", response_model=schemas.LearnerSummary)
 def summary(identifier: str) -> dict:
     """The stored advisor summary for a learner.
 
@@ -99,7 +94,7 @@ def summary(identifier: str) -> dict:
     return asdict(stored)
 
 
-@router.post("/ask")
+@router.post("/ask", response_model=schemas.Answer)
 def ask_question(body: Question) -> dict:
     """Answer a question from the warehouse, with citations.
 

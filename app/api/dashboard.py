@@ -17,6 +17,7 @@ from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException
 
+from app.api import schemas
 from app.dashboard.queries import (
     cohort_overview,
     engagement_trend,
@@ -33,7 +34,7 @@ _NOT_SCORED = (
 )
 
 
-@router.get("/cohort")
+@router.get("/cohort", response_model=schemas.CohortOverview)
 def cohort() -> dict:
     """The current risk distribution and alert count.
 
@@ -48,7 +49,7 @@ def cohort() -> dict:
     return asdict(overview)
 
 
-@router.get("/engagement")
+@router.get("/engagement", response_model=schemas.EngagementTrend)
 def engagement() -> dict:
     """Active learners per week. **Engagement over time, not risk.**"""
     with transaction() as connection:
@@ -56,7 +57,7 @@ def engagement() -> dict:
     return {"engagement_trend": [asdict(point) for point in points]}
 
 
-@router.get("/learners/{identifier}")
+@router.get("/learners/{identifier}", response_model=schemas.LearnerDetail)
 def learner(identifier: str) -> dict:
     """One learner's score and drivers.
 

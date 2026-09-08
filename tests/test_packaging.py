@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = ROOT / "pyproject.toml"
 
 #: Top-level directories that are development tooling, never shipped.
-DEV_ONLY_ROOTS = frozenset({"data", "evals", "tests", "infra"})
+DEV_ONLY_ROOTS = frozenset({"data", "evals", "tests", "infra", "tools"})
 
 #: Packages that must never ship even though their parent does. Label
 #: handling is an evaluation concern; shipping code that reads the
