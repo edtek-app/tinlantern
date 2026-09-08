@@ -80,6 +80,26 @@ def collect_provenance(
     )
 
 
+#: Printed in the OPENING framing of every report, beside the score,
+#: never in a limitations section at the bottom. A reader who takes the
+#: headline number away must take this with it — the same treatment the
+#: separability warning gets in the M3 report, and for the same reason:
+#: a limitation a reader has to go looking for is one they will not find.
+SELF_AUTHORSHIP_WARNING = """\
+> **Read the score with this.** The questions, the reference queries
+> that decide whether an answer is right, and the schema description the
+> model plans against were **all written by the same author**. This set
+> cannot detect a misconception shared between the person who wrote the
+> questions and the person who wrote the context the model answers from.
+>
+> That is a structural limitation of the instrument, not a caveat about
+> any one run. It does not weaken with a better score — a perfect run
+> under this arrangement and a perfect run under an independent one are
+> not the same evidence. What would strengthen it is an independently
+> authored question set, or questions drawn from real advisor queries
+> (ADR-0008, revisit triggers)."""
+
+
 def render(
     outcomes: tuple[Outcome, ...], metrics: Metrics, provenance: Provenance
 ) -> str:
@@ -88,6 +108,8 @@ def render(
 
     out += [
         "## Results",
+        "",
+        SELF_AUTHORSHIP_WARNING,
         "",
         f"- **{metrics.passed} of {metrics.total} passed** ({metrics.pass_rate:.0%}).",
         f"- Refusals: {metrics.refusals_correct} of "

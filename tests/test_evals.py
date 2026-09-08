@@ -650,6 +650,29 @@ def test_the_report_carries_what_verification_objected_to() -> None:
     assert "claim 0 contains 192" in body
 
 
+def test_the_self_authorship_limit_is_in_the_opening_framing() -> None:
+    """Beside the score, never in a limitations section at the bottom.
+
+    The questions, the reference queries and the schema description were
+    all written by the same author, so the set cannot detect a
+    misconception shared across all three. A reader who takes 18/18 away
+    must take that with it — the treatment M3's separability warning
+    got, and for the same reason: a limitation a reader has to go
+    looking for is one they will not find.
+    """
+    passing = grade(a_question(), an_answer("There are 3 learners."), truth=3)
+    body = render((passing,), measure((passing,)), collect_provenance("stub", "s", 1))
+
+    assert "same author" in body
+    before_failures = body.split("## Failures")[0]
+    assert "same author" in before_failures, (
+        "the warning is below the failures section — either it moved, or "
+        "the report grew a section between the score and the caveat that "
+        "a reader will stop at"
+    )
+    assert body.index("same author") < body.index("## Every question")
+
+
 def test_the_report_separates_refusal_and_answer_accuracy() -> None:
     """One combined rate would hide the trade between them."""
     passing = grade(a_question(), an_answer("There are 3 learners."), truth=3)

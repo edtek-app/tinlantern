@@ -162,8 +162,18 @@ committed real-provider eval run is an M4 acceptance criterion.
   a prompt is edited.
 - **Given up:** fluent connective prose, and any claim that would require
   the model to compute something from what it was given.
-- **Revisit triggers:** the drivers payload starts carrying its fitted
-  median, which unlocks the cohort comparison. **Ruled in advance, so it
+- **Revisit triggers:** **the golden question set is authored by the
+  same person who wrote the reference queries and the schema description
+  the model plans against**, so it cannot detect a misconception shared
+  across all three — a question phrased around an assumption, graded by
+  an oracle carrying the same assumption, answered from a description
+  that encodes it. Nothing in M4 reduces this, and a better score does
+  not: the arrangement is what limits the evidence, not the result. An
+  independently authored question set, or questions drawn from real
+  advisor queries, is what would make this a stronger instrument. Named
+  here so a reader knows it was seen rather than missed; the score in
+  every report carries it in the opening framing. The drivers payload
+  starts carrying its fitted median, which unlocks the cohort comparison. **Ruled in advance, so it
   is not relitigated:** that change must persist BOTH the learner's
   value and the fitted median used at ablation time, keyed to the same
   `model_version`. Recomputing either later reintroduces exactly the
