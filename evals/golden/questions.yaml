@@ -11,6 +11,39 @@
 # `reference_sql` must return exactly ONE row with ONE column. The harness
 # checks that the answer states that value.
 #
+# ---------------------------------------------------------------------
+# STANDING HAZARD — read before adding a question.
+#
+# The reference query is the oracle, and this oracle has been WRONG
+# THREE TIMES OUT OF TWELVE. Every one blamed the model for the
+# harness's own mistake:
+#
+#   learners-with-a-failure  counted `verb = 'failed'` only, missing
+#                            submissions marked unsuccessful
+#   alerted-count            counted rows, not learners: risk_score
+#                            holds one row per learner PER MODEL
+#                            VERSION, so it returned 76 for a cohort
+#                            of 120 learners with 38 alerted
+#   risk-above-half          the same double count
+#
+# A wrong reference is worse than no reference: it produces a confident
+# failure attributed to the wrong component. Assume yours is wrong until
+# a test says otherwise.
+#
+# Two habits that would have caught all three on day one:
+#   * Sanity-bound it. Every answered question carries a `bound`, and a
+#     test asserts the value cannot exceed that population. A count
+#     above the cohort size is the cheapest possible tell that a query
+#     counts the wrong thing.
+#   * Scope to one model_version. `warehouse.risk_score` accumulates a
+#     row per learner per scoring run (ADR-0007), so anything counting
+#     learners there must pick one version and one row per learner.
+# ---------------------------------------------------------------------
+#
+# `bound` names the population the reference value cannot exceed:
+# learners, courses, activities, events, assessments, days, probability
+# (0-1), or text for a non-numeric reference.
+#
 # A third of these are refusals, and most of those are the hard kind:
 # questions that look answerable from the schema because a related column
 # exists, but where that column does not mean what the question assumes.
@@ -21,27 +54,56 @@
 - id: learner-count
   question: How many learners are in the cohort?
   disposition: answered
+  bound: learners
   reference_sql: SELECT count(*) AS learners FROM warehouse.dim_student
 
+# CORRECTED after the third real-provider run. The reference was
+# `count(*) ... WHERE alerted` over the whole table, which returned 76
+# for a 120-learner cohort — risk_score holds one row per learner per
+# model version (ADR-0007), so it counted every learner twice. The model
+# scoped to the latest version, one row per learner, and got 38. The
+# model was right and did exactly what the schema description tells it
+# to do; the reference ignored our own instruction.
 - id: alerted-count
   question: How many learners are currently flagged as at risk?
   disposition: answered
+  bound: learners
   reference_sql: |
-    SELECT count(*) AS alerted FROM warehouse.risk_score WHERE alerted
+    WITH latest AS (
+        SELECT model_version FROM warehouse.risk_score
+        GROUP BY model_version ORDER BY max(scored_at) DESC LIMIT 1
+    ),
+    current AS (
+        SELECT DISTINCT ON (rs.student_key) rs.alerted
+        FROM warehouse.risk_score rs
+        JOIN latest l ON l.model_version = rs.model_version
+        ORDER BY rs.student_key, rs.window_close DESC, rs.scored_at DESC
+    )
+    SELECT count(*) FILTER (WHERE alerted) AS alerted FROM current
 
 - id: highest-risk
   question: What is the highest risk score in the cohort?
   disposition: answered
-  reference_sql: SELECT max(risk) AS highest FROM warehouse.risk_score
+  bound: probability
+  reference_sql: |
+    WITH latest AS (
+        SELECT model_version FROM warehouse.risk_score
+        GROUP BY model_version ORDER BY max(scored_at) DESC LIMIT 1
+    )
+    SELECT max(rs.risk) AS highest
+    FROM warehouse.risk_score rs
+    JOIN latest l ON l.model_version = rs.model_version
 
 - id: course-count
   question: How many courses are there?
   disposition: answered
+  bound: courses
   reference_sql: SELECT count(*) AS courses FROM warehouse.dim_course
 
 - id: retry-count
   question: How many assessment attempts were retries rather than first attempts?
   disposition: answered
+  bound: assessments
   reference_sql: |
     SELECT count(*) AS retries FROM warehouse.fact_assessment
     WHERE attempt_number > 1
@@ -49,6 +111,7 @@
 - id: mean-score
   question: What is the average scaled score across all graded work?
   disposition: answered
+  bound: probability
   reference_sql: |
     SELECT round(avg(scaled_score), 4) AS mean_score
     FROM warehouse.fact_assessment
@@ -75,6 +138,7 @@
     How many learners have at least one assessment result recorded as
     unsuccessful?
   disposition: answered
+  bound: learners
   reference_sql: |
     SELECT count(DISTINCT student_key) AS learners
     FROM warehouse.fact_assessment
@@ -83,23 +147,40 @@
 - id: active-days
   question: On how many distinct days was there any recorded activity?
   disposition: answered
+  bound: days
   reference_sql: |
     SELECT count(DISTINCT date_key) AS days FROM warehouse.fact_activity
 
 - id: activity-events
   question: How many learning events have been recorded in total?
   disposition: answered
+  bound: events
   reference_sql: SELECT count(*) AS events FROM warehouse.fact_activity
 
+# CORRECTED with alerted-count, same defect and same cause: 74 for a
+# 120-learner cohort, because every learner was counted once per model
+# version. The model scoped and got 37.
 - id: risk-above-half
   question: How many learners have a risk score above 0.5?
   disposition: answered
+  bound: learners
   reference_sql: |
-    SELECT count(*) AS learners FROM warehouse.risk_score WHERE risk > 0.5
+    WITH latest AS (
+        SELECT model_version FROM warehouse.risk_score
+        GROUP BY model_version ORDER BY max(scored_at) DESC LIMIT 1
+    ),
+    current AS (
+        SELECT DISTINCT ON (rs.student_key) rs.risk
+        FROM warehouse.risk_score rs
+        JOIN latest l ON l.model_version = rs.model_version
+        ORDER BY rs.student_key, rs.window_close DESC, rs.scored_at DESC
+    )
+    SELECT count(*) FILTER (WHERE risk > 0.5) AS learners FROM current
 
 - id: busiest-verb
   question: Which verb appears most often in the activity records?
   disposition: answered
+  bound: text
   reference_sql: |
     SELECT verb FROM warehouse.fact_activity
     GROUP BY verb ORDER BY count(*) DESC, verb LIMIT 1
@@ -107,6 +188,7 @@
 - id: largest-course
   question: How many activities does the largest course contain?
   disposition: answered
+  bound: activities
   reference_sql: |
     SELECT count(*) AS activities FROM warehouse.dim_activity
     GROUP BY course_key ORDER BY count(*) DESC LIMIT 1

@@ -28,6 +28,9 @@ from app.llm.providers.stub import StubProvider, canned
 from app.llm.qa import answer_prompt, plan_prompt
 from app.llm.query import run_generated_query
 from evals.harness.golden import (
+    BOUNDS,
+    PROBABILITY,
+    TEXT,
     GoldenQuestion,
     GoldenSetError,
     load,
@@ -190,6 +193,103 @@ def test_every_reference_query_returns_a_sane_value(
         assert value >= 0, f"{question.id}: a negative count is not sane"
 
 
+@pytest.mark.parametrize("question", [q for q in load() if q.reference_sql])
+def test_no_reference_value_exceeds_its_population(
+    connection: Connection, question: GoldenQuestion
+) -> None:
+    """The cheapest tell that a query counts the wrong thing.
+
+    A count above the population it counts over cannot be right, and it
+    is checkable without a model, without a real provider, and without
+    anyone reading the SQL. This exact check would have caught the
+    risk_score double count on the day it was written — 76 alerted in a
+    cohort of 120 learners — instead of three eval runs later, after it
+    had been quoted in two committed reports.
+
+    The oracle in this set has been wrong three times out of twelve. It
+    gets a bound for the same reason the model's answers do.
+    """
+    seed_cohort(connection)
+    value = reference_value(connection, question.reference_sql)
+
+    if question.bound == TEXT:
+        assert isinstance(value, str), (
+            f"{question.id}: bound says text but the reference returned "
+            f"{type(value).__name__} — either the bound or the query is wrong"
+        )
+        return
+
+    numeric = float(value)
+    if question.bound == PROBABILITY:
+        assert 0.0 <= numeric <= 1.0, (
+            f"{question.id}: {numeric} is not a probability. A risk or a "
+            "scaled score outside 0-1 means the query is reading a "
+            "different column than the question is about"
+        )
+        return
+
+    population = float(reference_value(connection, BOUNDS[question.bound]))
+    assert numeric <= population, (
+        f"{question.id}: the reference returned {numeric:g} over a "
+        f"population of {population:g} {question.bound}. A count cannot "
+        "exceed what it counts — the query is almost certainly counting "
+        "rows across a dimension the question does not range over, which "
+        "is exactly how alerted-count returned 76 for 120 learners"
+    )
+
+
+def test_every_answerable_question_declares_a_bound() -> None:
+    """Omission is how an unchecked oracle gets added next time."""
+    with pytest.raises(GoldenSetError, match="bound"):
+        parse(
+            [
+                {
+                    "id": "x",
+                    "question": "how many?",
+                    "disposition": "answered",
+                    "reference_sql": "SELECT 1",
+                }
+            ]
+        )
+
+
+def test_the_risk_score_references_count_learners_not_rows(
+    connection: Connection,
+) -> None:
+    """The specific defect, pinned so it cannot come back.
+
+    risk_score holds one row per learner PER MODEL VERSION (ADR-0007).
+    A reference that does not scope to one version counts every learner
+    once per scoring run, and the answer looks plausible until someone
+    notices it exceeds the cohort.
+    """
+    seed_cohort(connection)
+    # A second scoring run for the same learners and window.
+    connection.execute(
+        text(
+            """
+            INSERT INTO warehouse.risk_score
+                (student_key, window_close, model_version, risk, alerted,
+                 drivers, scored_at)
+            SELECT student_key, window_close, 'test001', risk, alerted,
+                   drivers, scored_at + interval '1 hour'
+            FROM warehouse.risk_score WHERE model_version = 'test000'
+            """
+        )
+    )
+    by_id = {question.id: question for question in load()}
+    learners = reference_value(connection, BOUNDS["learners"])
+
+    for identifier in ("alerted-count", "risk-above-half"):
+        value = reference_value(connection, by_id[identifier].reference_sql)
+        assert value <= learners, (
+            f"{identifier} returned {value} for {learners} learners after a "
+            "second scoring run — the reference is counting rows per model "
+            "version rather than learners"
+        )
+    assert reference_value(connection, by_id["alerted-count"].reference_sql) == 2
+
+
 def test_the_reference_queries_compute_what_they_claim(
     connection: Connection,
 ) -> None:
@@ -293,6 +393,7 @@ def a_question(**overrides) -> GoldenQuestion:
         "question": "How many learners?",
         "disposition": "answered",
         "reference_sql": "SELECT 1",
+        "bound": "learners",
     }
     return GoldenQuestion(**{**fields, **overrides})
 
