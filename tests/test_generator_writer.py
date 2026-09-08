@@ -20,6 +20,7 @@ from data.generator.writer import (
     STATEMENTS_FILE,
     write_cohort,
 )
+from tests.ferpa import assert_no_identifying_data
 
 pytestmark = pytest.mark.m0
 
@@ -86,7 +87,12 @@ def test_ground_truth_rows_carry_every_measurement(written) -> None:
 
 def test_sidecar_carries_no_statement_data(written) -> None:
     """The sidecar is labels. A second copy of the stream would be a leak."""
-    for row in lines(written.ground_truth_path):
+    rows = lines(written.ground_truth_path)
+    assert rows, (
+        "the sidecar is empty, so the loop below never runs and this test "
+        "asserts nothing — an absent subject, not a clean one"
+    )
+    for row in rows:
         parsed = json.loads(row)
         assert "verb" not in parsed
         assert "statements" not in parsed
@@ -95,10 +101,7 @@ def test_sidecar_carries_no_statement_data(written) -> None:
 
 def test_no_email_shaped_data_in_any_artifact(written) -> None:
     for path in (written.statements_path, written.ground_truth_path):
-        content = path.read_text(encoding="utf-8")
-        assert "@" not in content
-        assert "mbox" not in content
-        assert "mailto" not in content
+        assert_no_identifying_data(path.read_text(encoding="utf-8"), path.name)
 
 
 # --------------------------------------------------------------------------

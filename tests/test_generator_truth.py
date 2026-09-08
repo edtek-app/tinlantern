@@ -28,6 +28,7 @@ from data.generator.truth import (
     at_risk_rate,
     derive_ground_truth,
 )
+from tests.ferpa import assert_no_identifying_data
 
 pytestmark = pytest.mark.m0
 
@@ -322,7 +323,9 @@ def test_sidecar_carries_no_statement_data(config: CohortConfig) -> None:
     fields = set(GroundTruth.__dataclass_fields__)
     assert "statements" not in fields
     assert "events" not in fields
-    assert not any("@" in str(getattr(truth, name)) for name in fields)
+    assert fields, "no dataclass fields to scan"
+    serialised = " ".join(str(getattr(truth, name)) for name in fields)
+    assert_no_identifying_data(serialised, "ground-truth sidecar")
 
 
 def test_at_risk_rate_is_a_measurement_not_a_target(config: CohortConfig) -> None:

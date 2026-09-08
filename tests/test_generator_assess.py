@@ -21,6 +21,7 @@ from data.generator.emit import SESSION_VERBS
 from data.generator.enroll import ENROLLMENT_VERBS
 from data.generator.roster import build_roster
 from data.generator.stream import learner_course_statements, to_statements
+from tests.ferpa import assert_no_identifying_data
 
 pytestmark = pytest.mark.m0
 
@@ -348,8 +349,7 @@ def test_no_email_shaped_data_in_assessment_statements(config: CohortConfig) -> 
             for s in statements_for(config, "struggling")
         ]
     )
-    assert "@" not in dumped
-    assert "mbox" not in dumped
+    assert_no_identifying_data(dumped, "assessment statements")
 
 
 def test_to_statements_handles_an_empty_schedule(config: CohortConfig) -> None:

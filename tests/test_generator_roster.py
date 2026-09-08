@@ -21,6 +21,7 @@ from data.generator.roster import (
     learner_identifier,
     realized_mix,
 )
+from tests.ferpa import assert_no_identifying_data
 
 pytestmark = pytest.mark.m0
 
@@ -57,10 +58,7 @@ def serialize(roster) -> str:
 
 def test_no_email_shaped_data_anywhere_in_a_roster(config: CohortConfig) -> None:
     """An address in a screenshot, log, or demo cannot be un-seen."""
-    dumped = serialize(build_roster(config))
-    assert "@" not in dumped, "email-shaped data in roster output"
-    assert "mbox" not in dumped
-    assert "mailto" not in dumped
+    assert_no_identifying_data(serialize(build_roster(config)), "roster")
 
 
 def test_agents_are_identified_by_account_never_mbox(config: CohortConfig) -> None:

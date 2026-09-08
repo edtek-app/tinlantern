@@ -27,6 +27,7 @@ from data.generator.stream import (
     registration_id,
     statement_id,
 )
+from tests.ferpa import assert_no_identifying_data
 
 pytestmark = pytest.mark.m0
 
@@ -331,6 +332,4 @@ def test_no_email_shaped_data_in_emitted_statements(config: CohortConfig) -> Non
             for s in statements_for(config, "thriving")
         ]
     )
-    assert "@" not in dumped
-    assert "mbox" not in dumped
-    assert "mailto" not in dumped
+    assert_no_identifying_data(dumped, "emitted statements")
