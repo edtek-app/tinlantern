@@ -1,4 +1,4 @@
-.PHONY: setup migrate db-reset seed ingest etl dq report score lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
+.PHONY: setup migrate db-reset seed ingest etl dq report score evals lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
 
 # Local development default. Export DATABASE_URL to override (see .env.example).
 # The driver must be psycopg v3 — `postgresql://` alone resolves to psycopg2,
@@ -62,6 +62,13 @@ report:
 # Re-running replaces scores for the same window and model.
 score:
 	python -m ml
+
+# The golden question set against the REAL provider, written to
+# evals/reports/. Part of the milestone-close ritual: the gate runs the
+# same set against the stub, which proves the harness works and nothing
+# about the model. A synthetic run is REFUSED rather than written.
+evals:
+	python -m evals
 
 lint:
 	ruff check . && ruff format --check .
