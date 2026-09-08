@@ -38,4 +38,4 @@ jobs:
       - run: make migrate
       # CI runs the current milestone's gate; advance this as milestones
       # complete. gate-mN runs lint first, then the cumulative marked tests.
-      - run: make gate-m4
+      - run: make gate-m5
