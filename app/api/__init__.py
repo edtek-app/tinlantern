@@ -1,5 +1,6 @@
 """HTTP surface: the FastAPI routers TinLantern exposes."""
 
+from app.api.dashboard import router as dashboard_router
 from app.api.statements import router as statements_router
 
-__all__ = ["statements_router"]
+__all__ = ["dashboard_router", "statements_router"]
