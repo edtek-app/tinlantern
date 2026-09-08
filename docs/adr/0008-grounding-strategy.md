@@ -278,6 +278,40 @@ would be precisely the failure this ADR exists to prevent, wearing a
 disclaimer; and a question about attendance answered with a real number
 from a different quantity is undetectable by the person reading it.
 
+## The check's fundamental weakness, stated as a class
+
+Four defects of the same shape have now been found, all of them by
+running against a real model and none by any test:
+
+| # | the check was wrong about | cost |
+|---|---|---|
+| 1 | thousands separators — "192,431" read as 192 and 431 | 4 failures |
+| 2 | figures the *question* supplied, echoed in the answer | 1-2 failures |
+| 3 | digits inside a *column name* the query itself produced | 2 failures |
+| 4 | a timestamp's time of day, and how a timestamp is rendered | 3 failures |
+
+**The class: numeric grounding compares RENDERED PROSE against STRUCTURED
+VALUES, so every mismatch between how a value is rendered and how it is
+represented is a false rejection.** Not an oversight in four places — one
+weakness with four instances, and there will be more, because the set of
+ways a model may legitimately render a value it was correctly given is
+open-ended. Currency, units, ordinals, spelled-out numbers ("three
+learners"), scientific notation, and locale-specific separators are all
+unhandled today.
+
+The failures are safe in direction — a false rejection withholds a
+correct answer, it never shows a wrong one — but they are *not* cheap:
+they cost the user an answer the system had, and they make the eval score
+measure the instrument as much as the model. The first two runs are on
+record together for exactly this reason: 10/18 became 15/18 with no
+change to the model.
+
+What would remove the class rather than its instances is comparing
+structured values to structured values — having the model return the
+figure as data beside the prose, and checking that, so rendering never
+enters the comparison. That is a larger change than M4 has room for and
+is the honest answer to "why not just add another pattern".
+
 ## Additional failure modes
 
 - **The plan step is only as good as the description.** A question the

@@ -68,7 +68,9 @@ def ungrounded(
         The numbers that trace to nothing, in the order they appear.
     """
     permitted = tuple(allowed)
-    for literal in scrub:
+    # Longest first: removing "05:00" before "2026-02-09 05:00" would
+    # leave a fragment that no longer matches the longer form.
+    for literal in sorted(scrub, key=len, reverse=True):
         if literal:
             text = text.replace(literal, " ")
     return tuple(value for value in numbers_in(text) if not traces_to(value, permitted))
@@ -78,23 +80,54 @@ def quantities_in(value: object) -> tuple[float, ...]:
     """The numbers a database value legitimately contributes.
 
     A date contributes its parts, so an answer may say "March 2026"
-    about a row holding 2026-03-14. A string contributes nothing — it is
-    scrubbed instead, because an identifier's digits are not a quantity.
+    about a row holding 2026-03-14. **A timestamp contributes its time
+    of day too**: a row holding 2026-02-09 05:00 permits an answer to
+    write "05:00", and admitting only the date read the 5 and the 0 as
+    fabrications. A string contributes nothing — it is scrubbed instead,
+    because an identifier's digits are not a quantity.
     """
     if isinstance(value, bool) or value is None:
         return ()
     if isinstance(value, int | float | Decimal):
         return (float(value),)
-    if isinstance(value, datetime | date):
+    if isinstance(value, datetime):
+        return (
+            float(value.year),
+            float(value.month),
+            float(value.day),
+            float(value.hour),
+            float(value.minute),
+            float(value.second),
+        )
+    if isinstance(value, date):
         return (float(value.year), float(value.month), float(value.day))
     return ()
 
 
 def literals_in(value: object) -> tuple[str, ...]:
-    """The strings whose digits must not be read as quantities."""
+    """The strings whose digits must not be read as quantities.
+
+    A timestamp yields several renderings, not just ``isoformat()``.
+    Nobody writes ``2026-02-09T05:00:00+00:00`` in a sentence; a model
+    writes ``2026-02-09 05:00 UTC``, and scrubbing only the ISO form
+    matched nothing and let the clock digits through. The forms are
+    listed longest-first so a longer one is removed before a shorter one
+    can consume part of it.
+    """
     if isinstance(value, str):
         return (value,)
-    if isinstance(value, datetime | date):
+    if isinstance(value, datetime):
+        return (
+            value.isoformat(),
+            value.isoformat(sep=" "),
+            value.strftime("%Y-%m-%d %H:%M:%S"),
+            value.strftime("%Y-%m-%dT%H:%M:%S"),
+            value.strftime("%Y-%m-%d %H:%M"),
+            value.strftime("%H:%M:%S"),
+            value.strftime("%H:%M"),
+            value.date().isoformat(),
+        )
+    if isinstance(value, date):
         return (value.isoformat(),)
     return ()
 

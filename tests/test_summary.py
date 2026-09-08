@@ -182,6 +182,21 @@ def test_percentages_of_a_supplied_proportion_are_grounded() -> None:
     assert ungrounded_numbers("Risk is 73%.", subject) == (73.0,)
 
 
+def test_the_window_is_a_date_so_an_invented_time_is_still_rejected() -> None:
+    """The summariser holds a DATE, and a time of day is not in it.
+
+    Q&A had to start admitting clock digits, because its rows really do
+    hold timestamps. That fix must not leak here: `LearnerFacts` carries
+    `window_close` as a date, so "00:00 UTC" is a precision the model was
+    never given. Rejecting it is correct, and pinning that keeps the two
+    fact shapes from being quietly conflated.
+    """
+    subject = facts()
+
+    assert ungrounded_numbers("the window closing 2026-02-23", subject) == ()
+    assert ungrounded_numbers("the window closing 2026-02-23 09:30 UTC", subject) != ()
+
+
 def test_a_thousands_separator_is_one_number_not_two() -> None:
     """ "192,431" is a figure, not a 192 and a 431.
 

@@ -347,6 +347,71 @@ def test_digits_in_a_column_name_are_not_read_as_figures() -> None:
     assert verify_claims(payload, result) == ()
 
 
+def timestamp_row() -> QueryResult:
+    """A row whose timestamps are the ones the second eval run tripped on."""
+    from datetime import UTC, datetime
+
+    return a_result(
+        (
+            {
+                "window_close": datetime(2026, 2, 9, 5, 0, tzinfo=UTC),
+                "scored_at": datetime(2026, 9, 6, 16, 36, 5, 923395, tzinfo=UTC),
+                "learners": 74,
+            },
+        )
+    )
+
+
+def cite(text_value: str) -> dict:
+    return {"claims": [{"text": text_value, "source": "row:0"}]}
+
+
+def test_a_time_of_day_the_scrub_does_not_recognise_is_still_admitted() -> None:
+    """Isolates the QUANTITIES half of the timestamp fix.
+
+    "5:00" has no leading zero, so it matches none of the rendered forms
+    the scrub removes. Only admitting the hour and minute as quantities
+    lets it through — revert that and this fails while the scrub-based
+    test still passes.
+    """
+    payload = cite("74 learners; the window closed at 5:00 UTC.")
+
+    assert verify_claims(payload, timestamp_row()) == ()
+
+
+def test_a_rendering_finer_than_its_components_is_still_scrubbed() -> None:
+    """Isolates the SCRUB half.
+
+    "16:36:05.923395+00:00" carries a microsecond, which is not among the
+    components admitted as quantities — 5.923395 leaks as a fabrication
+    unless the rendered form is removed first. Revert the scrub to
+    isoformat() alone and this fails while the "5:00" test still passes.
+
+    The two halves look redundant on the common case and are not: each
+    covers a rendering the other misses.
+    """
+    payload = cite("74 learners, scored at 2026-09-06 16:36:05.923395+00:00.")
+
+    assert verify_claims(payload, timestamp_row()) == ()
+
+
+def test_a_timestamp_a_row_did_not_contain_is_still_rejected() -> None:
+    """The other direction, so neither half is a blanket amnesty.
+
+    Admitting the hour and minute must not admit ANY two small numbers,
+    and the scrub must not strip anything merely time-shaped: a time the
+    row does not hold stays a fabrication.
+    """
+    payload = cite("74 learners; the window closed at 19:45 UTC.")
+
+    problems = verify_claims(payload, timestamp_row())
+
+    assert any("19" in problem for problem in problems), (
+        "19:45 is not this row's timestamp — either the scrub is removing "
+        "any time-shaped text, or the hour is being admitted unconditionally"
+    )
+
+
 def test_a_thousands_separator_survives_the_row_check() -> None:
     result = a_result(({"events": 192431},))
     payload = {"claims": [{"text": "There are 192,431 events.", "source": "row:0"}]}
