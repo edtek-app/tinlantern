@@ -42,6 +42,7 @@ dev = [
 packages = [
     "app",
     "app.api",
+    "app.dashboard",
     "app.llm",
     "app.llm.providers",
     "app.raw",

@@ -153,6 +153,38 @@ moves to a deployed runtime and retraining per invocation stops being
 free, persisting a model artifact is the answer, and the version recorded
 here becomes the key that identifies it.
 
+## Resolving "the current model version"
+
+`warehouse.risk_score` keeps one row per learner **per scoring run**, so
+every consumer has to pick a version before it can count learners rather
+than rows. The obvious implementation is wrong and should not be
+re-derived:
+
+```sql
+ORDER BY max(scored_at) DESC LIMIT 1   -- WRONG
+```
+
+`scored_at` defaults to `now()`, which in PostgreSQL is **transaction
+time**. Two scoring runs inside one transaction — or two within the same
+clock tick — carry an identical timestamp, and the tie-break is then
+undefined: a consumer can silently serve an older model's scores while
+appearing current. Observed, not hypothesised; a dashboard query written
+this way selected the older run and a test caught it.
+
+**The newest version is resolved by `scored_at` and then by insertion
+order:**
+
+```sql
+ORDER BY max(scored_at) DESC, max(risk_score_key) DESC LIMIT 1
+```
+
+`risk_score_key` is a `BIGSERIAL`, so it strictly increases with
+insertion. It plays exactly the role `ingest_seq` plays in `raw`
+(ADR-0005): an opaque arrival marker, never read as event time. It is
+the tie-break, not the ordering — `scored_at` remains the semantic
+answer, and the surrogate key only decides between runs that claim the
+same instant.
+
 ## Consequences
 - **Easier:** a usable risk distribution for M5; a decision rule that is
   tested code rather than prose; requirements that disqualify rather than

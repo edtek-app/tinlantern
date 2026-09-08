@@ -72,6 +72,7 @@ def test_application_packages_are_listed_explicitly() -> None:
     assert "app" in packages
     assert "app.xapi" in packages
     assert "app.llm" in packages, "the LLM client is application code"
+    assert "app.dashboard" in packages, "the dashboard reads ship to M6"
     assert "ml.src" in packages, "promoted model code must ship"
 
 
