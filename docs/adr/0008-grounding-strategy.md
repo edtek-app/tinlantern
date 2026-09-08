@@ -324,7 +324,39 @@ is the honest answer to "why not just add another pattern".
 
 ## Additional failure modes
 
-- **The plan step is only as good as the description.** A question the
+- **Query shape varies between runs, and verification is sensitive to
+it.** Measured over five runs of the golden set: outcomes were stable
+18/18, but **nine of the twelve answerable questions produced a
+different SQL statement almost every run, and four never repeated a
+query once**. The model re-derives its plan each time and reaches the
+same answer by different routes — selecting a descriptive column here, a
+timestamp there.
+
+This is a coupling, not nondeterminism, and the distinction matters
+because the two have different fixes. The concrete case: `highest-risk`
+went fail, pass, fail, pass across the first four eval runs, and that
+history **is explained by query-shape variance meeting a
+column-sensitive check, not by unstable reasoning.** It generated five
+distinct queries in five runs; under the old grounding check, whether it
+passed depended on whether `scored_at` happened to be among the columns
+returned, because a timestamp the check could not admit was enough to
+withhold a correct answer. The variance did not go away when the check
+was fixed. Its consequence did.
+
+**Forward-looking consequence, and it is a design constraint on
+everything that consumes Q&A results: any check sensitive to which
+columns come back will make stable answers appear unstable, and the
+cause will look like the model.** M5's citation panel is the first
+consumer — a panel that renders or validates against an expected column
+set will flicker for questions whose answer never changed. Build against
+the answer and its cited rows, not against the shape of the result set.
+
+It also vindicates leaving `highest-risk`'s wording alone rather than
+treating it as an ambiguous question: rewording would have suppressed
+the symptom on one question while the property was present in nine of
+twelve.
+
+**The plan step is only as good as the description.** A question the
   warehouse *could* answer may be refused because the description does
   not make the path obvious. That direction is safe but invisible — a
   refusal rate against real questions is worth watching in the eval
