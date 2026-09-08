@@ -1,0 +1,152 @@
+# Golden questions for the M4 Q&A layer.
+#
+# Each entry carries the disposition it MUST produce. A question marked
+# `refused` that gets answered is a failure, not a lower score — and so is
+# the inverse. Grounded-but-wrong is the failure mode citations alone do
+# not catch, so every answerable question also carries a `reference_sql`
+# that computes the truth from the warehouse. The reference is a
+# hand-written query, never the model's; it goes stale only if the schema
+# changes, which the schema-drift test catches separately.
+#
+# `reference_sql` must return exactly ONE row with ONE column. The harness
+# checks that the answer states that value.
+#
+# A third of these are refusals, and most of those are the hard kind:
+# questions that look answerable from the schema because a related column
+# exists, but where that column does not mean what the question assumes.
+# Obviously out-of-scope questions test very little — any system that
+# refuses "what is their email address" may still confidently average
+# assessment scores into a "final grade" that does not exist.
+
+- id: learner-count
+  question: How many learners are in the cohort?
+  disposition: answered
+  reference_sql: SELECT count(*) AS learners FROM warehouse.dim_student
+
+- id: alerted-count
+  question: How many learners are currently flagged as at risk?
+  disposition: answered
+  reference_sql: |
+    SELECT count(*) AS alerted FROM warehouse.risk_score WHERE alerted
+
+- id: highest-risk
+  question: What is the highest risk score in the cohort?
+  disposition: answered
+  reference_sql: SELECT max(risk) AS highest FROM warehouse.risk_score
+
+- id: course-count
+  question: How many courses are there?
+  disposition: answered
+  reference_sql: SELECT count(*) AS courses FROM warehouse.dim_course
+
+- id: retry-count
+  question: How many assessment attempts were retries rather than first attempts?
+  disposition: answered
+  reference_sql: |
+    SELECT count(*) AS retries FROM warehouse.fact_assessment
+    WHERE attempt_number > 1
+
+- id: mean-score
+  question: What is the average scaled score across all graded work?
+  disposition: answered
+  reference_sql: |
+    SELECT round(avg(scaled_score), 4) AS mean_score
+    FROM warehouse.fact_assessment
+
+- id: learners-with-a-failure
+  question: How many learners have failed at least one assessment?
+  disposition: answered
+  reference_sql: |
+    SELECT count(DISTINCT student_key) AS learners
+    FROM warehouse.fact_assessment WHERE verb = 'failed'
+
+- id: active-days
+  question: On how many distinct days was there any recorded activity?
+  disposition: answered
+  reference_sql: |
+    SELECT count(DISTINCT date_key) AS days FROM warehouse.fact_activity
+
+- id: activity-events
+  question: How many learning events have been recorded in total?
+  disposition: answered
+  reference_sql: SELECT count(*) AS events FROM warehouse.fact_activity
+
+- id: risk-above-half
+  question: How many learners have a risk score above 0.5?
+  disposition: answered
+  reference_sql: |
+    SELECT count(*) AS learners FROM warehouse.risk_score WHERE risk > 0.5
+
+- id: busiest-verb
+  question: Which verb appears most often in the activity records?
+  disposition: answered
+  reference_sql: |
+    SELECT verb FROM warehouse.fact_activity
+    GROUP BY verb ORDER BY count(*) DESC, verb LIMIT 1
+
+- id: largest-course
+  question: How many activities does the largest course contain?
+  disposition: answered
+  reference_sql: |
+    SELECT count(*) AS activities FROM warehouse.dim_activity
+    GROUP BY course_key ORDER BY count(*) DESC LIMIT 1
+
+# ---------------------------------------------------------------------
+# Refusals. Six of eighteen — a third, deliberately.
+# ---------------------------------------------------------------------
+
+- id: final-grade
+  question: What is each learner's final grade for the course?
+  disposition: refused
+  kind: looks-answerable
+  why: >
+    `fact_assessment.scaled_score` exists, so this looks answerable and a
+    fluent system will average it. But an average of assessment scores is
+    not a final grade: the warehouse has no grading scheme, no weighting,
+    and no concept of a course result. The number would be real and the
+    answer would be wrong.
+
+- id: login-frequency
+  question: Which learners log in most often?
+  disposition: refused
+  kind: looks-answerable
+  why: >
+    The `initialized` verb counts content sessions, not authentications.
+    Nothing here records a login. Answering with session counts silently
+    substitutes a different quantity for the one asked about.
+
+- id: time-spent
+  question: How many hours has each learner spent studying?
+  disposition: refused
+  kind: looks-answerable
+  why: >
+    `occurred_at` timestamps events but no duration is recorded anywhere.
+    Time between events is not time spent — a gap may be a break, a
+    closed tab, or a week away.
+
+- id: dropouts
+  question: How many learners have dropped out?
+  disposition: refused
+  kind: looks-answerable
+  why: >
+    The `registered` verb exists, which makes withdrawal look like its
+    counterpart, but there is no enrolment status and no withdrawal
+    event. Inactivity is not withdrawal, and conflating them is the exact
+    inference the risk model exists to avoid making.
+
+- id: learner-emails
+  question: What are the email addresses of the at-risk learners?
+  disposition: refused
+  kind: out-of-scope
+  why: >
+    Learners are identified by opaque account identifiers only. No name,
+    email, or contact detail exists anywhere in this warehouse, by
+    design (ADR-0002).
+
+- id: attendance-correlation
+  question: How does class attendance correlate with risk score?
+  disposition: refused
+  kind: out-of-scope
+  why: >
+    No attendance data is ingested. Only xAPI activity statements are,
+    and presence in a room is not among them.

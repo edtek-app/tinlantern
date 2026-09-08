@@ -1,0 +1,562 @@
+"""The eval harness: mechanics in the gate, quality only against a model.
+
+**These tests assert that the harness works, not that the model does.**
+Everything here runs against the stub, so a threshold on groundedness
+here would be satisfied by canned text — the "looks healthy while
+broken" pattern. Quality thresholds belong to `make evals`, and M4's
+acceptance criteria require a committed real-provider run for exactly
+that reason.
+
+What the gate must prove is that the mechanics can DETECT failure, not
+merely complete. The seeded-wrong-answer cases below are that proof.
+
+Every test seeds the rows it asserts on. The reference queries are run
+against a cohort this file builds, so a broken reference query fails
+here as a test rather than later as a model failure.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+from sqlalchemy import Connection, text
+
+from app.llm.prompt_library import load_prompt
+from app.llm.providers.stub import StubProvider, canned
+from app.llm.qa import answer_prompt, plan_prompt
+from app.llm.query import run_generated_query
+from evals.harness.golden import (
+    GoldenQuestion,
+    GoldenSetError,
+    load,
+    parse,
+)
+from evals.harness.report import (
+    Provenance,
+    SyntheticRunRefused,
+    collect_provenance,
+    render,
+    write,
+)
+from evals.harness.runner import (
+    grade,
+    measure,
+    reference_value,
+    run_all,
+    states_truth,
+)
+
+pytestmark = pytest.mark.m4
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+# --------------------------------------------------------------------------
+# A small real cohort, built by these tests
+# --------------------------------------------------------------------------
+
+
+def seed_cohort(connection: Connection) -> None:
+    """Enough warehouse rows for every reference query to mean something.
+
+    Deliberately small and hand-built rather than the generated cohort:
+    the numbers below are checkable by eye, so a reference query that
+    counts the wrong thing is visible here rather than plausible.
+    """
+    connection.execute(
+        text(
+            "INSERT INTO warehouse.dim_course (course_iri, course_slug, title) "
+            "VALUES ('urn:c:1', 'c1', 'Course One'), ('urn:c:2', 'c2', 'Course Two')"
+        )
+    )
+    connection.execute(
+        text(
+            "INSERT INTO warehouse.dim_student (learner_identifier, "
+            "account_home_page) VALUES "
+            "('s-00001', 'https://x.invalid'), ('s-00002', 'https://x.invalid'), "
+            "('s-00003', 'https://x.invalid')"
+        )
+    )
+    connection.execute(
+        text(
+            "INSERT INTO warehouse.dim_date (date_key, full_date, year, quarter, "
+            "month, day, iso_week, day_of_week, day_name, is_weekend) VALUES "
+            "(20260201, DATE '2026-02-01', 2026, 1, 2, 1, 5, 7, 'Sunday', true), "
+            "(20260202, DATE '2026-02-02', 2026, 1, 2, 2, 6, 1, 'Monday', false) "
+            # The date dimension is pre-populated by migration 0003, so
+            # these rows may already be there. Conflicting is expected;
+            # the fact rows below are what this cohort actually asserts on.
+            "ON CONFLICT (date_key) DO NOTHING"
+        )
+    )
+    # Course One has two activities, Course Two has one.
+    connection.execute(
+        text(
+            "INSERT INTO warehouse.dim_activity (activity_iri, activity_type, "
+            "name, course_key, module_index) SELECT 'urn:a:' || n, 'module', "
+            "'Module ' || n, (SELECT course_key FROM warehouse.dim_course "
+            "WHERE course_slug = 'c1'), n FROM generate_series(1, 2) AS n"
+        )
+    )
+    connection.execute(
+        text(
+            "INSERT INTO warehouse.dim_activity (activity_iri, activity_type, "
+            "name, course_key, module_index) VALUES ('urn:a:3', 'module', "
+            "'Module 3', (SELECT course_key FROM warehouse.dim_course "
+            "WHERE course_slug = 'c2'), 1)"
+        )
+    )
+    connection.execute(
+        text(
+            """
+            INSERT INTO warehouse.fact_activity
+                (statement_id, student_key, course_key, activity_key, date_key,
+                 verb, occurred_at, ingest_seq)
+            SELECT gen_random_uuid(), s.student_key, c.course_key, a.activity_key,
+                   20260201, v.verb, TIMESTAMPTZ '2026-02-01 09:00Z', 1
+            FROM warehouse.dim_student s
+            CROSS JOIN (SELECT course_key FROM warehouse.dim_course
+                        WHERE course_slug = 'c1') c
+            CROSS JOIN (SELECT activity_key FROM warehouse.dim_activity
+                        WHERE activity_iri = 'urn:a:1') a
+            CROSS JOIN (VALUES ('experienced'), ('initialized')) AS v(verb)
+            """
+        )
+    )
+    connection.execute(
+        text(
+            """
+            INSERT INTO warehouse.fact_assessment
+                (statement_id, student_key, course_key, activity_key, date_key,
+                 verb, scaled_score, success, completion, attempt_number,
+                 occurred_at, ingest_seq)
+            SELECT gen_random_uuid(), s.student_key, c.course_key, a.activity_key,
+                   20260202, t.verb, t.score, t.verb = 'passed', true,
+                   t.attempt, TIMESTAMPTZ '2026-02-02 09:00Z', 1
+            FROM warehouse.dim_student s
+            CROSS JOIN (SELECT course_key FROM warehouse.dim_course
+                        WHERE course_slug = 'c1') c
+            CROSS JOIN (SELECT activity_key FROM warehouse.dim_activity
+                        WHERE activity_iri = 'urn:a:1') a
+            CROSS JOIN (VALUES ('failed', 0.40, 1), ('passed', 0.80, 2))
+                       AS t(verb, score, attempt)
+            """
+        )
+    )
+    connection.execute(
+        text(
+            """
+            INSERT INTO warehouse.risk_score
+                (student_key, window_close, model_version, risk, alerted, drivers)
+            SELECT s.student_key, TIMESTAMPTZ '2026-02-23Z', 'test000',
+                   r.risk, r.risk > 0.35, '{"additive": false}'::jsonb
+            FROM warehouse.dim_student s
+            JOIN (VALUES ('s-00001', 0.82), ('s-00002', 0.11), ('s-00003', 0.40))
+                 AS r(identifier, risk) ON r.identifier = s.learner_identifier
+            """
+        )
+    )
+
+
+# --------------------------------------------------------------------------
+# The reference queries — a broken one must fail HERE, not as a model failure
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("question", [q for q in load() if q.reference_sql])
+def test_every_reference_query_returns_a_sane_value(
+    connection: Connection, question: GoldenQuestion
+) -> None:
+    """A wrong reference query would blame the model for our mistake.
+
+    That is the worst outcome this harness can produce, so each query is
+    exercised against a cohort built above: it must run, return exactly
+    one row and one column, and produce a non-null value of a sensible
+    type. Counts must be non-negative; a query that silently returned
+    NULL would make every answer look wrong.
+    """
+    seed_cohort(connection)
+
+    value = reference_value(connection, question.reference_sql)
+
+    assert value is not None, (
+        f"{question.id}: the reference query returned NULL against a "
+        "populated cohort — either the query is wrong or it filters "
+        "everything out, and both would grade every answer as wrong"
+    )
+    if isinstance(value, int | float):
+        assert value >= 0, f"{question.id}: a negative count is not sane"
+
+
+def test_the_reference_queries_compute_what_they_claim(
+    connection: Connection,
+) -> None:
+    """Spot-check the arithmetic against a cohort small enough to count.
+
+    Parametrised sanity above proves each query runs and returns
+    something; this proves a few of them return the RIGHT something,
+    which is the part a type check cannot see.
+    """
+    seed_cohort(connection)
+    by_id = {question.id: question for question in load()}
+
+    def truth(identifier: str):
+        return reference_value(connection, by_id[identifier].reference_sql)
+
+    assert truth("learner-count") == 3
+    assert truth("course-count") == 2
+    assert truth("alerted-count") == 2, "0.82 and 0.40 exceed the 0.35 threshold"
+    assert truth("risk-above-half") == 1, "only 0.82 exceeds 0.5"
+    assert float(truth("highest-risk")) == pytest.approx(0.82)
+    assert truth("retry-count") == 3, "one second attempt per learner"
+    assert truth("learners-with-a-failure") == 3
+    assert truth("largest-course") == 2, "Course One holds two activities"
+    assert truth("active-days") == 1, "all activity rows share one date_key"
+
+
+# --------------------------------------------------------------------------
+# The golden set's own shape
+# --------------------------------------------------------------------------
+
+
+def test_refusals_are_a_substantial_fraction_and_include_hard_ones() -> None:
+    """A set of easy refusals measures almost nothing.
+
+    Any system that declines "what is their email address" may still
+    confidently average assessment scores into a final grade that does
+    not exist. The looks-answerable cases are the ones that separate a
+    grounded system from a fluent one, so their presence is pinned.
+    """
+    questions = load()
+    refusals = [q for q in questions if not q.expects_answer]
+
+    assert len(refusals) / len(questions) >= 0.30, (
+        "refusals have fallen below a third of the set — either questions "
+        "were added without refusal counterparts, or refusals were removed "
+        "because they were failing, which is the wrong fix"
+    )
+    hard = [q for q in refusals if q.kind == "looks-answerable"]
+    assert len(hard) >= 3, (
+        "too few looks-answerable refusals. Out-of-scope questions are easy "
+        "to refuse; the hard case is a column that exists but does not mean "
+        "what the question assumes"
+    )
+
+
+def test_an_answerable_question_without_a_reference_is_rejected() -> None:
+    """Silently grading on disposition alone is the failure to prevent."""
+    with pytest.raises(GoldenSetError, match="reference_sql"):
+        parse([{"id": "x", "question": "how many?", "disposition": "answered"}])
+
+
+def test_a_refusal_must_say_why() -> None:
+    with pytest.raises(GoldenSetError, match="why"):
+        parse([{"id": "x", "question": "what?", "disposition": "refused"}])
+
+
+def test_a_refusal_may_not_carry_a_reference_query() -> None:
+    with pytest.raises(GoldenSetError, match="must not carry"):
+        parse(
+            [
+                {
+                    "id": "x",
+                    "question": "what?",
+                    "disposition": "refused",
+                    "why": "no data",
+                    "reference_sql": "SELECT 1",
+                }
+            ]
+        )
+
+
+def test_duplicate_ids_are_rejected() -> None:
+    entry = {
+        "id": "x",
+        "question": "what?",
+        "disposition": "refused",
+        "why": "no data",
+    }
+    with pytest.raises(GoldenSetError, match="duplicate"):
+        parse([entry, dict(entry)])
+
+
+# --------------------------------------------------------------------------
+# Grading — the mechanics must DETECT failure, not merely complete
+# --------------------------------------------------------------------------
+
+
+def a_question(**overrides) -> GoldenQuestion:
+    fields = {
+        "id": "q",
+        "question": "How many learners?",
+        "disposition": "answered",
+        "reference_sql": "SELECT 1",
+    }
+    return GoldenQuestion(**{**fields, **overrides})
+
+
+def an_answer(text_value: str, answered: bool = True):
+    from app.llm.qa import Answer
+
+    return Answer(text=text_value, answered=answered, synthetic=True)
+
+
+def test_a_seeded_wrong_answer_is_caught() -> None:
+    """The gate's proof that grading can fail, not only finish.
+
+    The answer here is grounded — it would have cited a returned row —
+    and it is wrong, because the query measured something other than
+    what was asked. Citations cannot see this; the reference query is
+    what does.
+    """
+    outcome = grade(a_question(), an_answer("There are 91 learners."), truth=3)
+
+    assert outcome.passed is False
+    assert any("reference value" in problem for problem in outcome.problems)
+
+
+def test_answering_a_question_that_must_be_refused_fails() -> None:
+    question = a_question(
+        disposition="refused", reference_sql=None, why="no attendance data"
+    )
+
+    outcome = grade(question, an_answer("Attendance is 41 percent."), truth=None)
+
+    assert outcome.passed is False
+    assert any("expected a refusal" in problem for problem in outcome.problems)
+
+
+def test_refusing_a_question_that_should_be_answered_fails() -> None:
+    outcome = grade(a_question(), an_answer("no", answered=False), truth=3)
+
+    assert outcome.passed is False
+    assert any("expected an answer" in problem for problem in outcome.problems)
+
+
+def test_a_correct_answer_passes() -> None:
+    outcome = grade(a_question(), an_answer("There are 3 learners."), truth=3)
+
+    assert outcome.passed is True
+    assert outcome.problems == ()
+
+
+def test_a_text_reference_value_is_matched_as_a_substring() -> None:
+    assert states_truth("The most common verb is experienced.", "experienced")
+    assert not states_truth("The most common verb is initialized.", "experienced")
+
+
+def test_a_percentage_states_a_proportion() -> None:
+    assert states_truth("Risk peaks at 82%.", 0.82)
+
+
+def test_a_reference_query_returning_many_rows_is_rejected(
+    connection: Connection,
+) -> None:
+    """A wider result would grade every answer wrong, silently."""
+    seed_cohort(connection)
+
+    with pytest.raises(ValueError, match="exactly one row"):
+        reference_value(
+            connection, "SELECT learner_identifier FROM warehouse.dim_student"
+        )
+
+
+# --------------------------------------------------------------------------
+# End to end through the stub, and the refusal to write a synthetic report
+# --------------------------------------------------------------------------
+
+
+def stub_for(questions, connection: Connection, answers: dict[str, dict]):
+    """Register both calls for each question in a small set."""
+    system = load_prompt("grounding")
+    responses: dict[str, str] = {}
+    for question in questions:
+        plan = answers[question.id]["plan"]
+        responses.update(
+            canned(system, plan_prompt(question.question), json.dumps(plan))
+        )
+        reply = answers[question.id].get("answer")
+        if reply is not None:
+            result = run_generated_query(connection, plan["sql"])
+            responses.update(
+                canned(
+                    system,
+                    answer_prompt(question.question, result),
+                    json.dumps(reply),
+                )
+            )
+    return StubProvider(responses)
+
+
+def test_the_runner_completes_a_set_and_measures_it(connection: Connection) -> None:
+    seed_cohort(connection)
+    questions = (
+        a_question(
+            id="count",
+            reference_sql="SELECT count(*) AS n FROM warehouse.dim_student",
+        ),
+        a_question(
+            id="emails",
+            question="What are their email addresses?",
+            disposition="refused",
+            reference_sql=None,
+            why="no contact details exist",
+        ),
+    )
+    provider = stub_for(
+        questions,
+        connection,
+        {
+            "count": {
+                "plan": {
+                    "answerable": True,
+                    "sql": "SELECT count(*) AS learners FROM warehouse.dim_student",
+                    "reason": "",
+                },
+                "answer": {
+                    "claims": [{"text": "There are 3 learners.", "source": "row:0"}]
+                },
+            },
+            "emails": {
+                "plan": {
+                    "answerable": False,
+                    "sql": "",
+                    "reason": "No contact details are held.",
+                }
+            },
+        },
+    )
+
+    outcomes = run_all(questions, connection, provider)
+    metrics = measure(outcomes)
+
+    assert metrics.total == 2
+    assert metrics.passed == 2
+    assert metrics.refusals_expected == 1 and metrics.refusals_correct == 1
+    assert metrics.answers_expected == 1 and metrics.answers_correct == 1
+    assert metrics.synthetic is True
+
+
+def test_a_synthetic_run_refuses_to_write_a_report(tmp_path: Path) -> None:
+    """The rule that stops canned text becoming M4's evidence.
+
+    Implemented AND proven: a report in evals/reports/ that had only
+    ever seen the stub would satisfy the acceptance criterion while
+    measuring nothing, so the refusal is mechanical rather than a note
+    in a README.
+    """
+    outcome = grade(a_question(), an_answer("There are 3 learners."), truth=3)
+    metrics = measure((outcome,))
+    destination = tmp_path / "m4-llm.md"
+
+    assert metrics.synthetic is True
+    with pytest.raises(SyntheticRunRefused, match="stub"):
+        write("# report", metrics, path=str(destination))
+
+    assert not destination.exists(), "no file may be produced by a stub run"
+
+
+def test_a_real_run_writes_the_report(tmp_path: Path) -> None:
+    """The other direction, so the refusal is not vacuously always-on."""
+    from dataclasses import replace
+
+    from app.llm.qa import Answer
+
+    real = Answer(text="There are 3 learners.", answered=True, synthetic=False)
+    outcome = replace(
+        grade(a_question(), an_answer("There are 3 learners."), truth=3), answer=real
+    )
+    metrics = measure((outcome,))
+    destination = tmp_path / "m4-llm.md"
+
+    assert metrics.synthetic is False
+    written = write("# report", metrics, path=str(destination))
+
+    assert written.exists()
+
+
+# --------------------------------------------------------------------------
+# The report
+# --------------------------------------------------------------------------
+
+
+def test_the_provenance_header_names_the_provider_and_model() -> None:
+    """A committed artifact must identify what produced it.
+
+    Without the provider and model on the page, a reader cannot tell a
+    real run from a synthetic one that slipped through, and the whole
+    point of the criterion is that the distinction is visible.
+    """
+    header = Provenance(
+        generated_at="2026-09-07T00:00:00+00:00",
+        commit="abc1234",
+        dirty=False,
+        provider="anthropic",
+        model="claude-opus-5",
+        questions=18,
+    ).render()
+
+    assert "anthropic" in header
+    assert "claude-opus-5" in header
+    assert "abc1234" in header
+    assert "make evals" in header
+
+
+def test_the_report_renders_failures_with_the_query_that_ran() -> None:
+    """ "What did it run" is the first question about a bad answer."""
+    from app.llm.qa import Answer
+    from app.llm.query import QueryResult
+
+    sql = "SELECT count(*) AS n FROM warehouse.dim_student"
+    answer = Answer(
+        text="There are 91 learners.",
+        answered=True,
+        synthetic=True,
+        query=QueryResult(sql=sql, columns=("n",), rows=({"n": 3},), truncated=False),
+    )
+    outcome = grade(a_question(), answer, truth=3)
+    body = render((outcome,), measure((outcome,)), collect_provenance("stub", "s", 1))
+
+    assert "## Failures" in body
+    assert sql in body
+    assert "reference value" in body
+
+
+def test_the_report_separates_refusal_and_answer_accuracy() -> None:
+    """One combined rate would hide the trade between them."""
+    passing = grade(a_question(), an_answer("There are 3 learners."), truth=3)
+    body = render((passing,), measure((passing,)), collect_provenance("stub", "s", 1))
+
+    assert "Refusals:" in body
+    assert "Answers:" in body
+    assert "refuses everything" in body, "the reason must travel with the numbers"
+
+
+def test_make_evals_refuses_the_stub_before_running(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """The CLI says why, rather than raising on the first question.
+
+    With the stub, every golden question would hit UnregisteredPrompt —
+    accurate but opaque, when the real answer is that this target needs
+    a real provider. The refusal in `write` stays as the mechanical
+    backstop; this one is for the person who typed the command.
+    """
+    from evals.__main__ import main
+
+    monkeypatch.setenv("LLM_PROVIDER", "stub")
+
+    assert main() == 2
+    assert "refusing to run" in capsys.readouterr().err
+
+
+def test_the_harness_is_never_in_the_deployment_manifest() -> None:
+    """`evals` stays importable from the root and unlisted (ADR-0002)."""
+    import tomllib
+
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    packages = config["tool"]["setuptools"]["packages"]
+
+    assert not [name for name in packages if name.split(".")[0] == "evals"]
