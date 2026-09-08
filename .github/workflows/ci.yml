@@ -33,6 +33,16 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -e ".[dev]"
+      # From M5 the gate builds the frontend, because the criterion says
+      # "frontend builds" and a gate that skips it is not checking it.
+      # node_modules is cached on the lockfile, so a run only pays the
+      # install when the lockfile actually changed.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/web/package-lock.json
+      - run: make web-install
       # Alembic owns all DDL (ADR-0001), so CI builds its schema the same
       # way every other environment does.
       - run: make migrate

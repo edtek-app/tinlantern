@@ -1,4 +1,4 @@
-.PHONY: setup migrate db-reset seed ingest etl dq report score evals evals-variance lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
+.PHONY: setup migrate db-reset seed ingest etl dq report score evals evals-variance api-types web-install web-build lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
 
 # Local development default. Export DATABASE_URL to override (see .env.example).
 # The driver must be psycopg v3 — `postgresql://` alone resolves to psycopg2,
@@ -76,6 +76,21 @@ evals:
 evals-variance:
 	python -m evals --runs 5
 
+# The frontend. `npm ci` installs exactly the lockfile, so the gate
+# builds what CI builds. `web-build` runs `tsc --noEmit` before vite,
+# because a type error that only vite tolerates is still a type error.
+web-install:
+	cd app/web && npm ci
+
+web-build:
+	cd app/web && npm run build
+
+# Regenerates app/web/src/api-types.ts from the Pydantic response
+# models. The committed file is drift-tested, so this is how you change
+# it — editing the generated file by hand will not survive the gate.
+api-types:
+	python -m tools.generate_api_types
+
 lint:
 	ruff check . && ruff format --check .
 
@@ -97,7 +112,7 @@ gate-m3:
 gate-m4:
 	$(MAKE) lint && pytest -q -m "m0 or m1 or m2 or m3 or m4"
 gate-m5:
-	$(MAKE) lint && pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5"
+	$(MAKE) lint && $(MAKE) web-build && pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5"
 gate-m6:
 	$(MAKE) lint && terraform -chdir=infra fmt -check && terraform -chdir=infra validate && pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5"
 gate-m7:
