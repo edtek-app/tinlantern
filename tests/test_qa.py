@@ -263,10 +263,21 @@ def test_bookkeeping_tables_are_excluded_not_omitted() -> None:
     guess, the second forecloses it.
     """
     excluded = {table.name for table in TABLES if not table.queryable}
-    assert excluded == {"etl_state", "etl_rejections"}
+    assert excluded == {
+        "etl_state",
+        "etl_rejections",
+        "llm_call",
+        "learner_summary",
+    }
 
     text_form = describe()
     assert "Do not query these" in text_form
+    assert "a language model wrote" in text_form, (
+        "learner_summary is excluded for a stronger reason than the "
+        "bookkeeping tables — citing generated text would launder a "
+        "model's claim into a warehouse fact, and the model should be "
+        "told that rather than left to infer it from an omission"
+    )
     for name in excluded:
         assert name in text_form
         assert f"### warehouse.{name}" not in text_form

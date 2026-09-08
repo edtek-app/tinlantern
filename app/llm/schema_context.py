@@ -16,10 +16,17 @@ M5 fails the suite until it is described, because the failure mode of a
 stale schema description is silently wrong SQL, which reads exactly like
 correct SQL.
 
-`etl_state` and `etl_rejections` are described as **excluded**, not
-omitted: they are pipeline bookkeeping, and a model that sees a table
-called `etl_rejections` in a bare column list will eventually answer a
-question about data quality from it.
+Four tables are described as **excluded**, not omitted: a model that
+sees a table called `etl_rejections` in a bare column list will
+eventually answer a question about data quality from it.
+
+`etl_state` and `etl_rejections` are pipeline bookkeeping and `llm_call`
+is operational telemetry. **`learner_summary` is excluded for a stronger
+reason: it holds model-generated text.** Letting a grounded answer cite
+a summary would launder a generated claim into a warehouse fact — the
+citation would be real, and what it pointed at would be something a
+language model wrote. Grounding means citing the data, not citing an
+earlier answer.
 """
 
 from __future__ import annotations
@@ -176,6 +183,38 @@ TABLES: tuple[Table, ...] = (
         ),
     ),
     Table(
+        name="learner_summary",
+        grain="generated text, not warehouse fact",
+        columns=(
+            "learner_summary_key",
+            "student_key",
+            "window_close",
+            "model_version",
+            "summary",
+            "from_model",
+            "fallback_reason",
+            "synthetic",
+            "generated_at",
+        ),
+        queryable=False,
+    ),
+    Table(
+        name="llm_call",
+        grain="operational telemetry",
+        columns=(
+            "llm_call_key",
+            "occurred_at",
+            "operation",
+            "outcome",
+            "provider",
+            "model",
+            "latency_ms",
+            "model_version",
+            "detail",
+        ),
+        queryable=False,
+    ),
+    Table(
         name="etl_state",
         grain="pipeline bookkeeping",
         columns=("job_name", "last_ingest_seq", "last_run_at", "statements_seen"),
@@ -214,9 +253,11 @@ def describe() -> str:
 
     excluded = [table.name for table in TABLES if not table.queryable]
     lines.append(
-        "Do not query these — they are pipeline bookkeeping, not analytics: "
+        "Do not query these. They are bookkeeping, telemetry, or generated "
+        "text — not warehouse fact: "
         + ", ".join(f"`{name}`" for name in excluded)
-        + "."
+        + ". In particular `learner_summary` holds text a language model "
+        "wrote; citing it would present a generated claim as data."
     )
     lines.append("")
     lines.append(OVERLAP_WARNING)
