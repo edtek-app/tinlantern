@@ -221,7 +221,7 @@ def test_the_alerted_count_matches_the_alerted_bins(
 
 
 def test_the_trend_response_carries_no_risk_shaped_key(
-    client: TestClient, connection: Connection
+    client: TestClient, committed: Connection
 ) -> None:
     """Only one window_close exists, so there is no risk trend to draw.
 
@@ -231,11 +231,35 @@ def test_the_trend_response_carries_no_risk_shaped_key(
     The discipline is mechanical because a field renamed in six months
     is how a chart labelled one way starts being read as the other.
     """
+    seed_scores(committed, (0.82,))
+    seed_activity_dimensions(committed)
+    committed.execute(
+        text(
+            """
+            INSERT INTO warehouse.fact_activity
+                (statement_id, student_key, course_key, activity_key,
+                 date_key, verb, occurred_at, ingest_seq)
+            SELECT gen_random_uuid(), s.student_key, c.course_key,
+                   a.activity_key, 20260202, 'experienced',
+                   TIMESTAMPTZ '2026-02-02Z', 1
+            FROM warehouse.dim_student s
+            CROSS JOIN (SELECT course_key FROM warehouse.dim_course
+                        WHERE course_slug = 'c1') c
+            CROSS JOIN (SELECT activity_key FROM warehouse.dim_activity
+                        WHERE activity_iri = 'urn:a:1') a
+            WHERE s.learner_identifier = 's-00000'
+            """
+        )
+    )
+
     response = client.get("/api/engagement")
 
     assert response.status_code == 200
     body = response.json()
-    assert "engagement_trend" in body
+    assert body["engagement_trend"], (
+        "the trend is empty, so this test would pass against a response "
+        "that never contained a series at all"
+    )
 
     serialised = json.dumps(body).lower()
     assert "risk" not in serialised, (
@@ -332,7 +356,7 @@ def test_the_drilldown_carries_the_non_additivity_caveat(
 
 
 def test_no_endpoint_exposes_anything_identifying(
-    client: TestClient, connection: Connection
+    client: TestClient, committed: Connection
 ) -> None:
     """FERPA posture, extended from storage to the HTTP surface.
 
@@ -340,15 +364,20 @@ def test_no_endpoint_exposes_anything_identifying(
     API is the first place that could leak a person, so the same
     mechanical check applies here.
     """
-    seed_scores(connection, (0.82,))
+    seed_scores(committed, (0.82,))
 
-    bodies = [
-        client.get("/api/cohort").text,
-        client.get("/api/engagement").text,
-        client.get("/api/learners/s-00000").text,
+    responses = [
+        client.get("/api/cohort"),
+        client.get("/api/engagement"),
+        client.get("/api/learners/s-00000"),
     ]
+    assert [item.status_code for item in responses] == [200, 200, 200], (
+        "an endpoint returned an error, so this would be scanning error "
+        "messages rather than payloads — which is how this test passed "
+        "vacuously before the `committed` fixture existed"
+    )
 
-    for body in bodies:
+    for body in [item.text for item in responses]:
         lowered = body.lower()
         assert "@" not in body
         assert "mbox" not in lowered

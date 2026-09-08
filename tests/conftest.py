@@ -165,6 +165,44 @@ def connection(engine: Engine):
             transaction.rollback()
 
 
+@pytest.fixture
+def committed(engine: Engine):
+    """A connection whose writes COMMIT, for tests that drive the HTTP API.
+
+    The `connection` fixture rolls back, which is right for anything
+    reading through that same connection. **An HTTP endpoint opens its
+    own connection and cannot see uncommitted rows**, so a test that
+    seeds through `connection` and then calls an endpoint receives a 404
+    and happily asserts against it — two tests shipped that way before
+    this fixture existed, one of them a FERPA check that was scanning
+    error messages rather than payloads.
+
+    Rows are removed afterwards, so a committing test still leaves the
+    database as it found it.
+    """
+    # AUTOCOMMIT, not `engine.begin()`: a transaction that commits when
+    # the FIXTURE ends is still open while the test runs, so the endpoint
+    # cannot see the rows either. Each statement must land immediately.
+    open_connection = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+    try:
+        yield open_connection
+    finally:
+        open_connection.close()
+
+    with engine.begin() as cleanup:
+        for table in (
+            "warehouse.learner_summary",
+            "warehouse.llm_call",
+            "warehouse.risk_score",
+            "warehouse.fact_assessment",
+            "warehouse.fact_activity",
+            "warehouse.dim_activity",
+            "warehouse.dim_student",
+            "warehouse.dim_course",
+        ):
+            cleanup.execute(text(f"DELETE FROM {table}"))
+
+
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     unmarked = [
         item.nodeid

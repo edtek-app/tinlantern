@@ -7,7 +7,7 @@ conformance in two documented ways (see README limitations).
 
 from fastapi import FastAPI
 
-from app.api import dashboard_router, statements_router
+from app.api import dashboard_router, insights_router, statements_router
 
 app = FastAPI(
     title="TinLantern",
@@ -16,6 +16,7 @@ app = FastAPI(
 )
 app.include_router(statements_router)
 app.include_router(dashboard_router)
+app.include_router(insights_router)
 
 
 @app.get("/health", tags=["ops"])

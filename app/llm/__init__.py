@@ -16,6 +16,7 @@ from app.llm.client import (
     UnknownProvider,
     UnregisteredPrompt,
     build_client,
+    is_transport_failure,
 )
 from app.llm.prompt_library import UnknownPrompt, load_prompt, prompt_names
 
@@ -32,6 +33,7 @@ __all__ = [
     "UnknownProvider",
     "UnregisteredPrompt",
     "build_client",
+    "is_transport_failure",
     "load_prompt",
     "prompt_names",
 ]

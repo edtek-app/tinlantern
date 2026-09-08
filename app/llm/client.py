@@ -140,6 +140,41 @@ _BEDROCK = (
 )
 
 
+def is_transport_failure(error: BaseException) -> bool:
+    """Whether a failure was the provider being unreachable or overloaded.
+
+    ADR-0008 keeps SDK exceptions unwrapped, so their typed hierarchy
+    survives for whoever decides on retries. But that hierarchy lives in
+    the vendor package, and nothing outside `app/llm/` may import it —
+    a caller mapping a connection error to a 503 would otherwise have to
+    breach the boundary to do it.
+
+    So the classification happens here, behind the seam, and callers ask
+    rather than import. The SDK is imported lazily: this must stay
+    callable in a process that never configured a real provider.
+
+    Args:
+        error: The exception to classify.
+
+    Returns:
+        True for connection failures, timeouts, rate limits and 5xx —
+        the retryable ones. False for everything else, including a 400,
+        which is a bug in the request rather than a fault in the link.
+    """
+    try:
+        import anthropic
+    except ImportError:  # pragma: no cover - the SDK is a dependency
+        return False
+
+    if isinstance(error, anthropic.APIConnectionError | anthropic.APITimeoutError):
+        return True
+    if isinstance(error, anthropic.RateLimitError):
+        return True
+    if isinstance(error, anthropic.APIStatusError):
+        return error.status_code >= 500
+    return False
+
+
 def build_client(provider: str | None = None) -> Provider:
     """Construct the provider named by ``LLM_PROVIDER``.
 
