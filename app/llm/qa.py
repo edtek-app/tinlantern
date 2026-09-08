@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import Connection
 
 from app.llm.client import ModelRefused, Provider
-from app.llm.grounding import row_grounding, ungrounded
+from app.llm.grounding import numbers_in, row_grounding, ungrounded
 from app.llm.prompt_library import load_prompt
 from app.llm.query import QueryResult, UnsafeStatement, run_generated_query
 from app.llm.schema_context import describe
@@ -124,14 +124,23 @@ def answer_prompt(question: str, result: QueryResult) -> str:
     return "\n".join(lines)
 
 
-def verify_claims(payload: dict, result: QueryResult) -> tuple[str, ...]:
+def verify_claims(
+    payload: dict, result: QueryResult, question: str = ""
+) -> tuple[str, ...]:
     """Check every claim against the row it cites.
 
     A claim's figures must come from **the row it named**, not from any
     row that happened to be returned. Grounding against the whole result
     set would let a claim cite one learner and quote another's score,
     which is the kind of error that reads perfectly.
+
+    **Numbers the question itself supplied are admitted.** Asked "how
+    many learners have a risk score above 0.5", an answer repeats 0.5 —
+    a figure that came from the person asking, not from a row. Rejecting
+    it treated the user's own words as a fabrication. This does widen
+    what counts as grounded, and ADR-0008 records that.
     """
+    asked = tuple(numbers_in(question))
     labelled = result.labelled()
     problems: list[str] = []
 
@@ -152,7 +161,7 @@ def verify_claims(payload: dict, result: QueryResult) -> tuple[str, ...]:
             continue
 
         quantities, literals = row_grounding(row)
-        for value in ungrounded(text, quantities, scrub=literals):
+        for value in ungrounded(text, quantities + asked, scrub=literals):
             problems.append(
                 f"claim {index} contains {value:g}, which is not in the row "
                 f"it cites ({source}) — either the model computed something "
@@ -228,7 +237,7 @@ def ask(question: str, connection: Connection, provider: Provider) -> Answer:
             synthetic=synthetic,
         )
 
-    problems = verify_claims(payload, result)
+    problems = verify_claims(payload, result, question)
     if problems:
         return _refuse(
             "The answer could not be verified against the rows the query "

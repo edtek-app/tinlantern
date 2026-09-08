@@ -53,12 +53,32 @@
     SELECT round(avg(scaled_score), 4) AS mean_score
     FROM warehouse.fact_assessment
 
+# AMBIGUITY FOUND AND RESOLVED — first real-provider run, 2026-09-08.
+# The question read "How many learners have failed at least one
+# assessment?" and the reference counted `verb = 'failed'` only: 94.
+# The model wrote `verb = 'failed' OR success IS FALSE`: 96. The two
+# extra learners have a `submitted` statement marked unsuccessful.
+#
+# **The model was right and the reference was wrong.** A submission
+# recorded as unsuccessful is a failed assessment by any ordinary
+# reading, so the narrow reference encoded one interpretation of an
+# ambiguous question and then blamed the model for choosing the other.
+# This is the false-failure risk the reference-query approach was
+# approved with, arriving on its first contact with real output.
+#
+# Both halves of the fix matter: the reference is widened to the
+# model's reading, AND the question is reworded so the semantics no
+# longer depend on interpretation. Widening alone would leave a
+# question whose verdict is a coin flip on wording.
 - id: learners-with-a-failure
-  question: How many learners have failed at least one assessment?
+  question: >-
+    How many learners have at least one assessment result recorded as
+    unsuccessful?
   disposition: answered
   reference_sql: |
     SELECT count(DISTINCT student_key) AS learners
-    FROM warehouse.fact_assessment WHERE verb = 'failed'
+    FROM warehouse.fact_assessment
+    WHERE verb = 'failed' OR success IS FALSE
 
 - id: active-days
   question: On how many distinct days was there any recorded activity?

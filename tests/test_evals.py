@@ -524,6 +524,31 @@ def test_the_report_renders_failures_with_the_query_that_ran() -> None:
     assert "reference value" in body
 
 
+def test_the_report_carries_what_verification_objected_to() -> None:
+    """ "Could not be verified" is a rejection nobody can act on.
+
+    The first real-provider run cost seven live API calls to learn why
+    eight answers failed, because the artifact recorded only that they
+    had. The detail belongs in the report.
+    """
+    from app.llm.qa import Answer
+    from app.llm.query import QueryResult
+
+    answer = Answer(
+        text="withheld",
+        answered=False,
+        refusal_reason="could not be verified",
+        synthetic=True,
+        query=QueryResult(sql="SELECT 1", columns=(), rows=(), truncated=False),
+        problems=("claim 0 contains 192, which is not in the row it cites",),
+    )
+    outcome = grade(a_question(), answer, truth=3)
+    body = render((outcome,), measure((outcome,)), collect_provenance("stub", "s", 1))
+
+    assert "Verification objected to:" in body
+    assert "claim 0 contains 192" in body
+
+
 def test_the_report_separates_refusal_and_answer_accuracy() -> None:
     """One combined rate would hide the trade between them."""
     passing = grade(a_question(), an_answer("There are 3 learners."), truth=3)

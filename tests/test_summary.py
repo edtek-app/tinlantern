@@ -182,6 +182,20 @@ def test_percentages_of_a_supplied_proportion_are_grounded() -> None:
     assert ungrounded_numbers("Risk is 73%.", subject) == (73.0,)
 
 
+def test_a_thousands_separator_is_one_number_not_two() -> None:
+    """ "192,431" is a figure, not a 192 and a 431.
+
+    Four of eight failures in the first real-provider eval run were this
+    defect. Canned test data never had a number large enough to need a
+    separator, so a check that split on commas passed every test while
+    rejecting correct answers about a 192,431-statement warehouse.
+    """
+    subject = replace(facts(), cohort_size=192431)
+
+    assert ungrounded_numbers("There are 192,431 events.", subject) == ()
+    assert ungrounded_numbers("There are 192,432 events.", subject) == (192432.0,)
+
+
 def test_the_opaque_identifier_is_not_read_as_a_figure() -> None:
     """`s-00417` is a fact, but its digits are not a quantity.
 

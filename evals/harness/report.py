@@ -115,6 +115,15 @@ def render(
         out.append(f"Expected {item.question.disposition}, got {item.observed}.")
         for problem in item.problems:
             out.append(f"- {problem}")
+        # What verification actually objected to. Without this the report
+        # says only "could not be verified", and learning why costs a
+        # live API call per failure — the same shape as a rejection row
+        # nobody can act on.
+        if item.answer.problems:
+            out.append("")
+            out.append("Verification objected to:")
+            for problem in item.answer.problems:
+                out.append(f"- {problem}")
         if item.answer.query is not None:
             out.append("")
             out.append(f"Query run:\n```sql\n{item.answer.query.sql}\n```")

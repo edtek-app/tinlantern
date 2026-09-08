@@ -321,6 +321,39 @@ def test_a_claim_must_ground_in_the_row_it_names_not_any_row() -> None:
     )
 
 
+def test_a_number_the_question_supplied_is_admitted() -> None:
+    """Asked about "above 0.5", an answer may repeat 0.5.
+
+    That figure came from the person asking, not from a row. Rejecting
+    it treated the user's own words as a fabrication and refused a
+    correct answer in the first real-provider run.
+    """
+    result = a_result(({"learners_above": 74},))
+    payload = {"claims": [{"text": "74 learners score above 0.5.", "source": "row:0"}]}
+
+    assert verify_claims(payload, result, "How many score above 0.5?") == ()
+    assert verify_claims(payload, result, "How many are at risk?") != ()
+
+
+def test_digits_in_a_column_name_are_not_read_as_figures() -> None:
+    """A model citing `learners_above_0_5` is naming its column.
+
+    Row VALUES were scrubbed and row KEYS were not, so a column name the
+    query itself produced was read as an assertion of 5 and 0.
+    """
+    result = a_result(({"learners_above_0_5": 74},))
+    payload = {"claims": [{"text": "learners_above_0_5 is 74.", "source": "row:0"}]}
+
+    assert verify_claims(payload, result) == ()
+
+
+def test_a_thousands_separator_survives_the_row_check() -> None:
+    result = a_result(({"events": 192431},))
+    payload = {"claims": [{"text": "There are 192,431 events.", "source": "row:0"}]}
+
+    assert verify_claims(payload, result) == ()
+
+
 def test_identifiers_in_a_row_are_not_read_as_figures() -> None:
     result = a_result(({"learner": "s-00417", "risk": 0.82},))
     payload = {"claims": [{"text": "Learner s-00417 scored 0.82.", "source": "row:0"}]}

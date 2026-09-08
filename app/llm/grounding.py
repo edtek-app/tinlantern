@@ -17,12 +17,22 @@ from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 
-_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+#: Matches a figure as a human writes one, thousands separators included.
+#: The grouped alternative must come FIRST: without it "192,431" matches
+#: as 192 and 431, and a correct answer is rejected twice over. That is
+#: not hypothetical — it caused four of eight failures in the first
+#: real-provider eval run, because canned test data never had a number
+#: big enough to need a comma.
+_NUMBER = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?")
 
 
 def numbers_in(text: str) -> list[float]:
-    """Every numeric literal in a piece of text."""
-    return [float(match) for match in _NUMBER.findall(text)]
+    """Every numeric literal in a piece of text.
+
+    "192,431" is one number, not two. An answer written for a human uses
+    separators, and a check that splits on them measures formatting.
+    """
+    return [float(match.replace(",", "")) for match in _NUMBER.findall(text)]
 
 
 def traces_to(value: float, allowed: Iterable[float]) -> bool:
@@ -96,7 +106,10 @@ def row_grounding(row: dict) -> tuple[tuple[float, ...], tuple[str, ...]]:
         The quantities it contributes and the literals to scrub.
     """
     quantities: list[float] = []
-    literals: list[str] = []
+    # Column names are supplied text too, and they carry digits: a model
+    # citing `learners_above_0_5` is naming the column it was handed, not
+    # asserting 5 and 0. Scrubbing only the values missed that.
+    literals: list[str] = list(row.keys())
     for value in row.values():
         quantities.extend(quantities_in(value))
         literals.extend(literals_in(value))
