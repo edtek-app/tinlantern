@@ -50,6 +50,12 @@ class Outcome(StrEnum):
 
     OK = "ok"
     RETRIED = "retried"
+    #: Something the endpoint could not classify. Recorded before it is
+    #: re-raised, because an unclassified failure leaving no trace means
+    #: the table shows a healthy system while every request 500s — the
+    #: same silent hole as the read-only transaction bug, arriving from
+    #: the other direction.
+    UNCLASSIFIED = "unclassified"
     MALFORMED = "malformed"
     REFUSED = "refused"
     FALLBACK = "fallback"

@@ -49,10 +49,12 @@ from fastapi import APIRouter, HTTPException
 
 from app.api import schemas
 from app.api.schemas import Question
+from app.config import demo_mode
 from app.dashboard.queries import learner_detail
 from app.dashboard.summaries import read
 from app.dashboard.telemetry import Outcome, record, timed
 from app.db import transaction
+from app.demo import DEMO_QUESTIONS
 from app.llm.client import (
     MalformedResponse,
     ModelRefused,
@@ -166,6 +168,17 @@ def ask_question(body: Question) -> dict:
                 # the SDK (ADR-0001). Anything else re-raises unchanged —
                 # a bug must not be served as a 503.
                 if not is_transport_failure(failure):
+                    # Record BEFORE re-raising. A 500 that leaves no row
+                    # makes the table report a healthy system while
+                    # every request fails.
+                    record(
+                        operation="qa",
+                        outcome=Outcome.UNCLASSIFIED,
+                        provider=provider.name,
+                        model=model,
+                        latency_ms=timer.elapsed_ms,
+                        detail=f"{type(failure).__name__}: {failure}",
+                    )
                     raise
                 record(
                     operation="qa",

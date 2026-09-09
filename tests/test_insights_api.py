@@ -512,3 +512,32 @@ def test_a_withheld_answer_records_its_objections(
         "the row records that verification failed but not which figure "
         "broke — the same discard as the summary path"
     )
+
+
+def test_an_unclassified_failure_still_lands_a_row(
+    client: TestClient, committed: Connection
+) -> None:
+    """A 500 that leaves no trace makes the table lie about health.
+
+    The endpoint re-raises what it cannot classify — correct, a bug
+    must not be served as an outage — but a failure recorded nowhere
+    means `llm_call` reports a healthy system while every request 500s.
+    Same silent hole as the read-only transaction bug, from the other
+    direction.
+    """
+    committed.execute(text("DELETE FROM warehouse.llm_call"))
+    use(Exploding())
+
+    response = client.post("/api/ask", json={"question": "How many learners?"})
+
+    assert response.status_code == 500, "still re-raised, not swallowed"
+    counts = outcome_counts(committed)
+    assert counts.get(str(Outcome.UNCLASSIFIED)) == 1
+
+    detail = committed.execute(
+        text("SELECT detail FROM warehouse.llm_call ORDER BY llm_call_key DESC LIMIT 1")
+    ).scalar()
+    assert "ZeroDivisionError" in (detail or ""), (
+        "the exception type is what a reader needs to act on; the outcome "
+        "column already says it was unclassified"
+    )
