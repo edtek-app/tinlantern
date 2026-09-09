@@ -14,7 +14,65 @@ ML, and uses an LLM to produce grounded advisor summaries and
 natural-language Q&A with citations.
 
 ## Why it exists — TODO(M6): problem narrative, 2 paragraphs
-## Demo — TODO(M6): live URL + 3 screenshots/GIF + walkthrough video link
+## Demo
+
+Running locally in demo mode — no language model is called; Q&A replays
+answers recorded once from a real model, and each reply says so.
+
+### Cohort overview
+
+![Cohort overview: 38 of 120 learners flagged, a risk distribution, weekly
+active learners, and the ranked learner list](docs/images/cohort-overview.png)
+
+The headline is the flagged count, not a chart — "who needs attention"
+should not arrive after two visualisations. The risk distribution's
+middle bin edge IS the alert threshold, so the chart cannot disagree
+with the flag on the same learner. The second chart is **engagement over
+time, deliberately not risk over time**: only one feature window has
+been scored, so a risk line would be a single point or a line drawn
+through repeated scoring runs.
+
+### Learner drill-down
+
+![Learner drill-down: risk score, the features driving it, and an advisor
+summary](docs/images/learner-drilldown.png)
+
+Per-learner drivers, measured by moving one feature to the cohort median
+and re-scoring. They are shown as absolute contributions with the
+non-additivity caveat inline — never a pie chart, a stacked bar, or a
+"top three explain X%" line, because the contributions are
+counterfactual, they interact, and they do not sum.
+
+### Q&A with citations
+
+![A question answered with the executed SQL and the cited row shown: the
+query SELECT round(avg(scaled_score)::numeric, 2) ... and row:0 carrying
+avg_scaled_score 0.67 over 6,919 graded statements](docs/images/qa-with-citations.png)
+
+**This is the part that matters.** The answer is not asserted, it is
+evidenced: the panel shows **the exact SQL that ran** and **the rows it
+returned**, and every figure in the answer is checked against the row
+the claim cites before a reader sees it. Here the answer states 0.67 and
+6,919, and `row:0` beneath it carries `avg_scaled_score: 0.67` and
+`graded_statements: 6919` — the same numbers, from the query above them.
+An answer whose figures do not trace to a cited row is withheld rather
+than shown with a caveat.
+
+Rows are cited positionally rather than by primary key because most
+questions produce aggregates, and an aggregate has no key to cite.
+
+### Refusal
+
+![The question "What is each learner's final grade for the course?"
+answered with a refusal explaining the warehouse holds no final-grade
+field](docs/images/qa-refusal.png)
+
+A question the warehouse cannot answer is **refused, not approximated**.
+`fact_assessment` holds per-assessment scores and no course grade, so
+averaging them into a "final grade" would produce a real number
+answering a different question — which an advisor cannot detect. Across
+five evaluation runs the system refused 6 of 6 unanswerable questions,
+including four written to *look* answerable.
 ## Architecture — TODO(M2): diagram + component walkthrough
 ## Key decisions — TODO(ongoing): link each ADR with a one-line tradeoff
 ## Evaluation — TODO(M3/M4): risk-model metrics table + LLM groundedness results
