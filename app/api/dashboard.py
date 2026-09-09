@@ -19,9 +19,11 @@ from fastapi import APIRouter, HTTPException
 
 from app.api import schemas
 from app.dashboard.queries import (
+    DEFAULT_LIMIT,
     cohort_overview,
     engagement_trend,
     learner_detail,
+    rank_learners,
 )
 from app.db import transaction
 
@@ -55,6 +57,26 @@ def engagement() -> dict:
     with transaction() as connection:
         points = engagement_trend(connection)
     return {"engagement_trend": [asdict(point) for point in points]}
+
+
+@router.get("/learners", response_model=schemas.LearnerRanking)
+def learners(limit: int = DEFAULT_LIMIT) -> dict:
+    """Learners by risk, highest first.
+
+    The way in to a drill-down. M5's criterion said "student
+    drill-down" and assumed a route to one that did not exist: the
+    detail endpoint needs an identifier a user has no way to obtain
+    from a distribution chart.
+
+    Bounded by default, with the cohort total returned alongside, so a
+    caller can say "top 50 of 120" instead of implying it is showing
+    everyone.
+    """
+    with transaction() as connection:
+        ranking = rank_learners(connection, limit=limit)
+    if ranking is None:
+        raise HTTPException(status_code=404, detail=_NOT_SCORED)
+    return asdict(ranking)
 
 
 @router.get("/learners/{identifier}", response_model=schemas.LearnerDetail)

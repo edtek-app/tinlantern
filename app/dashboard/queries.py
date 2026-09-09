@@ -190,6 +190,84 @@ def cohort_overview(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class RankedLearner:
+    """One row of the "who should I look at" list."""
+
+    learner_identifier: str
+    risk: float
+    alerted: bool
+
+
+@dataclass(frozen=True, slots=True)
+class LearnerRanking:
+    """The ranked list, and how much of the cohort it covers.
+
+    ``total`` travels with the rows so a caller can say "top 50 of 120"
+    rather than implying it is showing everything. A list that silently
+    truncates is how a director concludes nobody else needs attention.
+    """
+
+    model_version: str
+    learners: tuple[RankedLearner, ...]
+    total: int
+
+
+#: Bounded from the start. 120 learners fits in one response today and
+#: stops fitting at a cohort size we have not met; a limit added under
+#: M6 deployment pressure is a limit designed in a hurry.
+DEFAULT_LIMIT = 50
+
+
+def rank_learners(
+    connection: Connection, limit: int = DEFAULT_LIMIT
+) -> LearnerRanking | None:
+    """Learners by risk, highest first.
+
+    Returns:
+        The ranking, or None when nothing has been scored — the same
+        distinction between absent and empty the rest of this module
+        draws.
+    """
+    version = latest_model_version(connection)
+    if version is None:
+        return None
+
+    rows = connection.execute(
+        text(
+            f"""
+            SELECT s.learner_identifier, current.risk, current.alerted
+            FROM ({_CURRENT_SCORES}) current
+            JOIN warehouse.dim_student s USING (student_key)
+            ORDER BY current.risk DESC, s.learner_identifier
+            LIMIT :limit
+            """
+        ),
+        {"model_version": version, "limit": limit},
+    ).fetchall()
+
+    total = connection.execute(
+        text(f"SELECT count(*) FROM ({_CURRENT_SCORES}) current"),
+        {"model_version": version},
+    ).scalar_one()
+
+    if not total:
+        return None
+
+    return LearnerRanking(
+        model_version=version,
+        learners=tuple(
+            RankedLearner(
+                learner_identifier=row.learner_identifier,
+                risk=float(row.risk),
+                alerted=row.alerted,
+            )
+            for row in rows
+        ),
+        total=total,
+    )
+
+
 _ENGAGEMENT = text(
     """
     SELECT min(d.full_date) AS week_start,

@@ -105,6 +105,35 @@ def test_the_trend_screen_has_a_series_to_draw(
         assert point["week_start"]
 
 
+def test_the_drilldown_is_reachable_from_the_ranked_list(
+    client: TestClient, committed: Connection
+) -> None:
+    """The route in, end to end.
+
+    M5's criterion said "student drill-down" and assumed a way to reach
+    one. There was none: the detail endpoint needs an identifier a user
+    cannot get from a distribution chart. This asserts the list hands
+    back an identifier the detail endpoint accepts, which is the whole
+    path a director takes.
+    """
+    seed_demo(committed)
+
+    listing = client.get("/api/learners")
+    assert listing.status_code == 200, listing.text
+
+    ranking = listing.json()
+    assert ranking["learners"], "an empty list is not a reachable drill-down"
+    assert ranking["total"] == 4
+
+    risks = [item["risk"] for item in ranking["learners"]]
+    assert risks == sorted(risks, reverse=True), "highest risk first"
+
+    top = ranking["learners"][0]["learner_identifier"]
+    detail = client.get(f"/api/learners/{top}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["learner_identifier"] == top
+
+
 def test_an_unseeded_demo_reports_missing_rather_than_empty(
     client: TestClient,
 ) -> None:
@@ -114,4 +143,5 @@ def test_an_unseeded_demo_reports_missing_rather_than_empty(
     healthy-looking cohort that had never been measured.
     """
     assert client.get("/api/cohort").status_code == 404
+    assert client.get("/api/learners").status_code == 404
     assert client.get("/api/learners/s-00000").status_code == 404

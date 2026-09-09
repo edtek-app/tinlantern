@@ -32,6 +32,18 @@ export interface EngagementTrend {
   engagement_trend: EngagementPoint[];
 }
 
+export interface RankedLearner {
+  learner_identifier: string;
+  risk: number;
+  alerted: boolean;
+}
+
+export interface LearnerRanking {
+  model_version: string;
+  learners: RankedLearner[];
+  total: number;
+}
+
 export interface Driver {
   feature: string;
   contribution: number;

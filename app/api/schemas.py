@@ -59,6 +59,26 @@ class EngagementTrend(BaseModel):
     engagement_trend: list[EngagementPoint]
 
 
+class RankedLearner(BaseModel):
+    """One row of the ranked learner list."""
+
+    learner_identifier: str
+    risk: float
+    alerted: bool
+
+
+class LearnerRanking(BaseModel):
+    """The ranked list, with the cohort total beside it.
+
+    ``total`` is present so a client can say "top 50 of 120" rather than
+    implying the list is everything.
+    """
+
+    model_version: str
+    learners: list[RankedLearner]
+    total: int
+
+
 class Driver(BaseModel):
     """One contribution to a learner's risk."""
 

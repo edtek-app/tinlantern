@@ -19,6 +19,7 @@ from app.dashboard.queries import (
     engagement_trend,
     latest_model_version,
     learner_detail,
+    rank_learners,
 )
 from ml.src.drivers import CONTRIBUTION_CAVEAT
 from ml.src.model import ALERT_THRESHOLD
@@ -138,6 +139,73 @@ def test_a_learner_gets_their_newest_score_only(connection: Connection) -> None:
     assert detail is not None
     assert detail.risk == pytest.approx(0.82)
     assert detail.model_version == "test001"
+
+
+# --------------------------------------------------------------------------
+# The ranked list — the way in to a drill-down
+# --------------------------------------------------------------------------
+
+
+def test_learners_are_ranked_by_risk_highest_first(
+    connection: Connection,
+) -> None:
+    """A director's question is "who should I look at", not "list them"."""
+    seed_scores(connection, (0.11, 0.91, 0.42))
+
+    ranking = rank_learners(connection)
+
+    assert ranking is not None
+    assert [round(item.risk, 2) for item in ranking.learners] == [0.91, 0.42, 0.11]
+    assert ranking.total == 3
+
+
+def test_the_ranking_counts_learners_not_rows(connection: Connection) -> None:
+    """The double count, pinned again at a third endpoint.
+
+    risk_score holds a row per learner PER MODEL VERSION (ADR-0007). It
+    returned 76 for a 120-learner cohort once and survived two committed
+    eval reports; each new consumer gets its own guard rather than
+    trusting that the last one covered it.
+    """
+    seed_scores(connection, (0.11, 0.91), model_version="old")
+    seed_scores(connection, (0.11, 0.91), model_version="new")
+
+    ranking = rank_learners(connection)
+
+    assert ranking is not None
+    assert ranking.total == 2, "four rows, two learners"
+    assert len(ranking.learners) == 2
+    assert ranking.model_version == "new"
+
+
+def test_the_total_travels_with_a_truncated_list(
+    connection: Connection,
+) -> None:
+    """ "Top 3 of 5" is honest; three rows alone implies there are three.
+
+    A list that silently truncates is how a director concludes nobody
+    else needs attention.
+    """
+    seed_scores(connection, (0.9, 0.8, 0.7, 0.6, 0.5))
+
+    ranking = rank_learners(connection, limit=3)
+
+    assert ranking is not None
+    assert len(ranking.learners) == 3
+    assert ranking.total == 5
+
+
+def test_an_unscored_cohort_has_no_ranking(connection: Connection) -> None:
+    assert rank_learners(connection) is None
+
+
+def test_the_ranking_endpoint_reports_missing_rather_than_empty(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/learners")
+
+    assert response.status_code == 404
+    assert "make score" in response.json()["detail"]
 
 
 # --------------------------------------------------------------------------

@@ -42,6 +42,8 @@ MODELS: tuple[type[BaseModel], ...] = (
     schemas.CohortOverview,
     schemas.EngagementPoint,
     schemas.EngagementTrend,
+    schemas.RankedLearner,
+    schemas.LearnerRanking,
     schemas.Driver,
     schemas.LearnerDetail,
     schemas.LearnerSummary,
