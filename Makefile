@@ -1,4 +1,4 @@
-.PHONY: setup migrate db-reset seed ingest etl dq report score evals evals-variance api-types web-install web-build lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
+.PHONY: setup migrate db-reset seed ingest etl dq report score evals evals-variance api-types web-install web-build web-test lint test run gate-m0 gate-m1 gate-m2 gate-m3 gate-m4 gate-m5 gate-m6 gate-m7
 
 # Local development default. Export DATABASE_URL to override (see .env.example).
 # The driver must be psycopg v3 — `postgresql://` alone resolves to psycopg2,
@@ -85,6 +85,12 @@ web-install:
 web-build:
 	cd app/web && npm run build
 
+# Component behaviour, in jsdom. `web-build` type-checks; this asserts
+# what renders. A chart that compiles and draws nothing passes the
+# first and fails the second.
+web-test:
+	cd app/web && npm test
+
 # Regenerates app/web/src/api-types.ts from the Pydantic response
 # models. The committed file is drift-tested, so this is how you change
 # it — editing the generated file by hand will not survive the gate.
@@ -112,7 +118,7 @@ gate-m3:
 gate-m4:
 	$(MAKE) lint && pytest -q -m "m0 or m1 or m2 or m3 or m4"
 gate-m5:
-	$(MAKE) lint && $(MAKE) web-build && pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5"
+	$(MAKE) lint && $(MAKE) web-build && $(MAKE) web-test && pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5"
 gate-m6:
 	$(MAKE) lint && terraform -chdir=infra fmt -check && terraform -chdir=infra validate && pytest -q -m "m0 or m1 or m2 or m3 or m4 or m5"
 gate-m7:
