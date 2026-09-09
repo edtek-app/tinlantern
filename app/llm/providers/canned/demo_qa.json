@@ -1,0 +1,37 @@
+{
+  "04e2d8c060f59b7ab3450d33befc73e6": {
+    "body": "{\"answerable\": false, \"sql\": \"\", \"reason\": \"The warehouse has no final or course-level grade. `fact_assessment` holds one row per graded statement with `scaled_score`, `raw_score`, `success`, `completion` and `attempt_number` for individual activities \\n\\nthere is no gradebook table, no course grade column, and no weighting or credit information that would let a final grade be derived. Aggregating per-activity scores (an average or max) would produce a real number that is not the final grade, so I won't substitute it. Answering this would need a grade fact table carrying the course-level result, or the assessment weights and grading rules used to compute it.\"}",
+    "model": "claude-opus-5",
+    "recorded_on": "2026-09-09"
+  },
+  "3211fb159c96528120d499f589747269": {
+    "body": "{\"answerable\": true, \"sql\": \"SELECT verb, count(*) AS event_count FROM warehouse.fact_activity GROUP BY verb ORDER BY event_count DESC, verb LIMIT 10;\", \"reason\": \"\"}",
+    "model": "claude-opus-5",
+    "recorded_on": "2026-09-09"
+  },
+  "5cd647db984dd1c49d6c6a452c67e13a": {
+    "body": "{\"answerable\": true, \"sql\": \"WITH latest_model AS (\\n    SELECT model_version\\n    FROM warehouse.risk_score\\n    ORDER BY scored_at DESC\\n    LIMIT 1\\n),\\nlatest_window AS (\\n    SELECT max(rs.window_close) AS window_close\\n    FROM warehouse.risk_score rs\\n    JOIN latest_model lm ON lm.model_version = rs.model_version\\n)\\nSELECT lm.model_version,\\n       lw.window_close,\\n       count(*) FILTER (WHERE rs.alerted) AS alerted_learners,\\n       count(*) AS scored_learners\\nFROM warehouse.risk_score rs\\nJOIN latest_model lm ON lm.model_version = rs.model_version\\nJOIN latest_window lw ON lw.window_close = rs.window_close\\nGROUP BY lm.model_version, lw.window_close;\", \"reason\": \"\"}",
+    "model": "claude-opus-5",
+    "recorded_on": "2026-09-09"
+  },
+  "82c4257ab43a784809ff6ff15e451734": {
+    "body": "{\"claims\": [{\"text\": \"The average scaled score across graded work is 0.67029573637808931927.\", \"source\": \"row:0\"}, {\"text\": \"That average is computed over 6,919 scored statements.\", \"source\": \"row:0\"}]}",
+    "model": "claude-opus-5",
+    "recorded_on": "2026-09-09"
+  },
+  "9a8b7b2e96b96e5dec285053b74ab554": {
+    "body": "{\"claims\": [{\"text\": \"The most frequent verb is 'played', with 57,752 events.\", \"source\": \"row:0\"}, {\"text\": \"'completed' is next, with 37,245 events.\", \"source\": \"row:1\"}, {\"text\": \"'answered' follows, with 30,974 events.\", \"source\": \"row:2\"}]}",
+    "model": "claude-opus-5",
+    "recorded_on": "2026-09-09"
+  },
+  "ec83f628e7747c1116d32f4502266d42": {
+    "body": "{\"claims\": [{\"text\": \"38 learners are flagged as at risk, out of 120 scored learners.\", \"source\": \"row:0\"}, {\"text\": \"That count comes from model version 34ffde7 for the window closing 2026-02-09 05:00 UTC.\", \"source\": \"row:0\"}]}",
+    "model": "claude-opus-5",
+    "recorded_on": "2026-09-09"
+  },
+  "f1b895742366edbec1f782ab32b778ba": {
+    "body": "{\"answerable\": true, \"sql\": \"SELECT avg(scaled_score) AS avg_scaled_score, count(*) AS scored_statements FROM warehouse.fact_assessment WHERE scaled_score IS NOT NULL;\", \"reason\": \"\"}",
+    "model": "claude-opus-5",
+    "recorded_on": "2026-09-09"
+  }
+}

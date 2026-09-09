@@ -27,6 +27,8 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from functools import cache
+from pathlib import Path
 from typing import ClassVar
 
 from app.llm.client import (
@@ -67,11 +69,68 @@ def canned(system: str, prompt: str, response: str) -> dict[str, str]:
     return {request_digest(system, prompt): response}
 
 
-#: Canned responses for interactions that exist in the repository. Empty
-#: at the commit that introduces the client — the summariser and the Q&A
-#: layer each register their own as they land, which is what keeps this
-#: list an inventory of real interactions rather than a pile of fixtures.
+@dataclass(frozen=True, slots=True)
+class Recorded:
+    """A real model response, captured once and replayed since.
+
+    Demo mode replays these rather than calling a model. The provenance
+    is stored PER RESPONSE, not once for the set, so a partially
+    re-recorded registry stays accurate about every entry rather than
+    inheriting one date from whichever run was last.
+    """
+
+    body: str
+    model: str
+    recorded_on: str
+
+    def marker(self) -> str:
+        """What this response says about itself.
+
+        Both facts, because either alone misleads. "No model was called"
+        is true of the replay and wrong about the text — a reader would
+        discount prose a real model wrote as machine-generated filler,
+        which UNDERSTATES its authority. Naming the model and the date
+        says the true thing in both directions.
+        """
+        return (
+            f"[RECORDED — from {self.model} on {self.recorded_on}, "
+            "replayed without calling a model]"
+        )
+
+
+#: Hand-written canned responses. Still empty: nothing in the repository
+#: has needed one that a real recording could not supply, and a fixture
+#: written by hand would be a mock-up of the product rather than the
+#: product. Kept because a future interaction may genuinely have no real
+#: counterpart to record.
 CANNED_RESPONSES: dict[str, str] = {}
+
+#: Real responses, captured once by `tools/record_demo_responses.py` and
+#: replayed in demo mode. Loaded from disk rather than written here so a
+#: re-recording is a data diff a reviewer can read.
+RECORDED_PATH = Path(__file__).resolve().parent / "canned" / "demo_qa.json"
+
+
+@cache
+def recorded_responses(path: Path = RECORDED_PATH) -> dict[str, Recorded]:
+    """The recorded set, keyed by request digest.
+
+    An absent file is not an error: the demo has not been recorded yet,
+    and every request then falls through to the unregistered path, which
+    says so loudly. A silent empty registry would look like a working
+    demo answering nothing.
+    """
+    if not path.is_file():
+        return {}
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        digest: Recorded(
+            body=entry["body"],
+            model=entry["model"],
+            recorded_on=entry["recorded_on"],
+        )
+        for digest, entry in raw.items()
+    }
 
 
 _UNREGISTERED = (
@@ -93,6 +152,7 @@ class StubProvider:
     """A provider that answers only what it was told to answer."""
 
     responses: Mapping[str, str] = field(default_factory=lambda: CANNED_RESPONSES)
+    recorded: Mapping[str, Recorded] = field(default_factory=recorded_responses)
 
     name: ClassVar[str] = "stub"
 
@@ -104,6 +164,20 @@ class StubProvider:
                 explanations and the digest to register under.
         """
         digest = request_digest(system, prompt)
+
+        replay = self.recorded.get(digest)
+        if replay is not None:
+            return Completion(
+                text=f"{replay.marker()}\n{replay.body}",
+                provider=self.name,
+                # The model that WROTE it, not the one replaying it. A
+                # reader reconciling a demo screenshot needs to know
+                # which model's output they are looking at.
+                model=replay.model,
+                # Still true: no model was called to serve this request.
+                synthetic=True,
+            )
+
         try:
             body = self.responses[digest]
         except KeyError:
@@ -132,7 +206,10 @@ class StubProvider:
         on supplied facts — is verification's job, not the provider's.
         """
         completion = self.complete(system=system, prompt=prompt)
-        body = completion.text.removeprefix(SYNTHETIC_MARKER).strip()
+        body = completion.text
+        for line in (SYNTHETIC_MARKER, *(r.marker() for r in self.recorded.values())):
+            body = body.removeprefix(line)
+        body = body.strip()
         try:
             return json.loads(body), completion
         except json.JSONDecodeError as broken:
