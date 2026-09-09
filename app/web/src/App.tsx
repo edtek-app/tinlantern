@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Cohort } from "./screens/Cohort";
 import { Learner } from "./screens/Learner";
 import { LearnerList } from "./screens/LearnerList";
+import { Ask } from "./screens/Ask";
 
 // No router. COST, stated because it is the first thing a user will
 // ask for: no deep-linking to a learner, so a director cannot send a
@@ -29,6 +30,7 @@ export function App() {
         <>
           <Cohort />
           <LearnerList onSelect={setSelected} />
+          <Ask />
         </>
       )}
     </main>

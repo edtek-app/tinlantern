@@ -1,14 +1,23 @@
 """The LLM-backed endpoints: a learner's summary, and Q&A.
 
-**Synchronous, for M5.** Q&A is two sequential model calls — roughly
-10-25 seconds measured. A spinner is honest for a question someone just
-asked, and submit-then-poll buys nothing locally.
+**Synchronous, for M5.** Q&A is two sequential model calls. **Measured
+end to end against the real provider, eight questions: 5.0-11.7 seconds,
+median ~7.** An earlier figure of "10-25 seconds" appears in some
+commit messages; it was an estimate that was never measured, and this
+range replaces it.
 
-    REVISIT TRIGGER, and it is close: API Gateway's hard integration
-    timeout is 29 SECONDS. A 10-25s synchronous answer has almost no
-    margin, so M6 either moves this to submit-then-poll, or streams, or
-    runs somewhere without that ceiling. Whoever hits a 504 in M6
-    should find this note before they start debugging the model.
+    REVISIT TRIGGER: API Gateway's hard integration timeout is 29
+    SECONDS. The measured range leaves real headroom, but the sample is
+    eight questions on one cohort and says nothing about the tail — a
+    slow plan on a harder question can still cross it. M6 either moves
+    this to submit-then-poll, or streams, or runs somewhere without that
+    ceiling. Whoever hits a 504 in M6 should find this note before they
+    start debugging the model.
+
+    **Streaming is also what makes honest stage indication possible.**
+    Under this synchronous endpoint the client observes nothing between
+    request and response, so the UI shows a plain spinner rather than
+    pretending to know which stage is running.
 
 **A `MalformedResponse` is retried exactly once, and the retry is
 recorded.** The eval harness saw 0 in 90 question-runs — enough to call
