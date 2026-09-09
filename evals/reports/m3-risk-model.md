@@ -1,6 +1,6 @@
 # M3 — Risk model evaluation
 
-> **Provenance.** Generated 2026-09-06T16:21:16+00:00 from commit `488ef0e3a9553905b941c02e75b8a910a1bc5acf`, cohort seed `20260301`, over 192,431 statements and 120 learners.
+> **Provenance.** Generated 2026-09-09T18:26:15+00:00 from commit `6bb3364524e4c40056ba8df2a64965874253a9f0`, cohort seed `20260301`, over 192,431 statements and 120 learners.
 >
 > Regenerate with `make report`. If these counts do not match the current warehouse, this report is stale.
 
