@@ -23,6 +23,14 @@ function asRow(value: unknown): Record<string, unknown> {
     : {};
 }
 
+// The first table a statement reads from, for the collapsed summary
+// line. Best-effort and deliberately so: it labels a disclosure, and a
+// wrong guess costs a slightly vaguer label, not a wrong answer.
+function tableIn(sql: string): string | null {
+  const match = /\bfrom\s+([a-z_][a-z0-9_.]*)/i.exec(sql);
+  return match ? (match[1] ?? null) : null;
+}
+
 function Row({ label, row }: { label: string; row: Record<string, unknown> }) {
   const keys = Object.keys(row);
   return (
@@ -43,9 +51,22 @@ export function Citations({ answer }: { answer: Answer }) {
   const labels = Object.keys(answer.citations);
   if (!answer.sql && labels.length === 0) return null;
 
+  // Collapsed by default, but the summary line names what is inside. A
+  // collapsed panel with no indication that evidence exists makes the
+  // citation work invisible — and it is the thing that most
+  // distinguishes this from a generic LLM dashboard.
+  const table = answer.sql ? tableIn(answer.sql) : null;
+  const rowCount = labels.length;
+  const inside = [
+    rowCount > 0
+      ? `${rowCount} ${rowCount === 1 ? "row" : "rows"}${table ? ` from ${table}` : ""}`
+      : null,
+    answer.sql ? "the query that ran" : null,
+  ].filter(Boolean);
+
   return (
-    <details className="citations" open>
-      <summary>How this was answered</summary>
+    <details className="citations">
+      <summary>How this was answered — {inside.join(", ")}</summary>
 
       {answer.sql && (
         <>

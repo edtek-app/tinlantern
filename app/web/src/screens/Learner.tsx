@@ -60,27 +60,44 @@ export function Learner({ identifier }: { identifier: string }) {
   return (
     <section>
       <h2>{detail.learner_identifier}</h2>
-      <p>
-        Risk <strong>{detail.risk.toFixed(2)}</strong>,{" "}
-        {detail.alerted ? "above" : "below"} the{" "}
-        {detail.threshold.toFixed(2)} alert threshold, for the window closing{" "}
-        {detail.window_close}.
-      </p>
-      <p className="provenance">
-        Model <code>{detail.model_version}</code>.
-      </p>
 
-      <Drivers drivers={detail.drivers} caveat={detail.caveat} />
+      <div className="stats">
+        <div>
+          <div
+            className={
+              detail.alerted ? "stat-figure is-alerted" : "stat-figure"
+            }
+          >
+            {detail.risk.toFixed(2)}
+          </div>
+          <span className="stat-label">Risk score</span>
+        </div>
+        <p className="stat-context">
+          {detail.alerted ? "Above" : "Below"} the{" "}
+          {detail.threshold.toFixed(2)} alert threshold, for the window
+          closing {detail.window_close}.
+          <br />
+          <span className="provenance">
+            Model <code>{detail.model_version}</code>
+          </span>
+        </p>
+      </div>
 
-      <h3>Advisor summary</h3>
-      {summary ? (
-        <>
-          <Provenance summary={summary} />
-          <p className="summary">{summary.summary}</p>
-        </>
-      ) : (
-        <EmptyState what="summary for this learner" how="make score" />
-      )}
+      <div className="split-wide">
+        <Drivers drivers={detail.drivers} caveat={detail.caveat} />
+
+        <div>
+          <h3>Advisor summary</h3>
+          {summary ? (
+            <>
+              <Provenance summary={summary} />
+              <p className="summary">{summary.summary}</p>
+            </>
+          ) : (
+            <EmptyState what="summary for this learner" how="make score" />
+          )}
+        </div>
+      </div>
     </section>
   );
 }

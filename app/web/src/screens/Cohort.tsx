@@ -41,23 +41,42 @@ export function Cohort() {
   return (
     <section>
       <h2>Cohort</h2>
-      <p>
-        <strong>{overview.alerted}</strong> of{" "}
-        <strong>{overview.learners}</strong> learners are above the{" "}
-        {overview.threshold.toFixed(2)} alert threshold ({share}%), for the
-        window closing {overview.window_close}.
-      </p>
-      <p className="provenance">
-        Model <code>{overview.model_version}</code>.
-      </p>
 
-      <Distribution bins={overview.distribution} threshold={overview.threshold} />
+      {/* The headline arrives first. "Who needs attention" previously
+          appeared after two charts, which is the actual UX defect —
+          a director should not have to read a distribution to learn
+          how many learners are flagged. */}
+      <div className="stats">
+        <div>
+          <div className="stat-figure is-alerted">{overview.alerted}</div>
+          <span className="stat-label">Learners flagged</span>
+        </div>
+        <div>
+          <div className="stat-figure">{overview.learners}</div>
+          <span className="stat-label">Scored</span>
+        </div>
+        <p className="stat-context">
+          {share}% are above the {overview.threshold.toFixed(2)} alert
+          threshold, for the window closing {overview.window_close}.
+          <br />
+          <span className="provenance">
+            Model <code>{overview.model_version}</code>
+          </span>
+        </p>
+      </div>
 
-      {trend && trend.engagement_trend.length > 0 ? (
-        <Trend points={trend.engagement_trend} />
-      ) : (
-        <EmptyState what="recorded activity" how="make ingest && make etl" />
-      )}
+      <div className="split">
+        <Distribution
+          bins={overview.distribution}
+          threshold={overview.threshold}
+        />
+
+        {trend && trend.engagement_trend.length > 0 ? (
+          <Trend points={trend.engagement_trend} />
+        ) : (
+          <EmptyState what="recorded activity" how="make ingest && make etl" />
+        )}
+      </div>
     </section>
   );
 }
