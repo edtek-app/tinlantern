@@ -419,3 +419,96 @@ def test_generating_a_summary_records_the_call(connection: Connection) -> None:
     counts = outcome_counts(connection)
     assert counts.get(str(Outcome.FALLBACK)) == 1
     assert read(connection, "s-00000", detail.model_version) is not None
+
+
+# --------------------------------------------------------------------------
+# A recorded failure carries what it objected to, not only that it happened
+# --------------------------------------------------------------------------
+
+
+def test_a_fallback_records_what_verification_objected_to(
+    connection: Connection,
+) -> None:
+    """A reason that duplicates the `outcome` column carries nothing.
+
+    `AdvisorSummary.problems` says which claim broke; storing only
+    "verification-failed" beside an outcome column already reading
+    "fallback" is a diagnostic gap wearing the shape of observability.
+    Recovering these once cost 25 live API calls to re-derive what the
+    code had already computed.
+    """
+    from app.dashboard.summaries import _detail
+
+    detailed = _detail(
+        AdvisorSummary(
+            text="…",
+            from_model=False,
+            fallback_reason=FallbackReason.VERIFICATION_FAILED,
+            synthetic=False,
+            problems=("claim 3 contains 41, which traces to no supplied fact",),
+        )
+    )
+
+    assert detailed is not None
+    assert "verification-failed" in detailed, "the category is still useful"
+    assert "claim 3 contains 41" in detailed, (
+        "the objection is the only thing this column can carry that the "
+        "outcome column cannot"
+    )
+
+
+def test_a_withheld_answer_records_its_objections(
+    client: TestClient, committed: Connection
+) -> None:
+    """The same gap on the Q&A path, where the sentence is not a
+    duplicate but the objections were still dropped."""
+    import json as _json
+
+    from app.llm.prompt_library import load_prompt
+    from app.llm.providers.stub import StubProvider, canned
+    from app.llm.qa import answer_prompt, plan_prompt
+    from app.llm.query import run_generated_query
+
+    committed.execute(text("DELETE FROM warehouse.llm_call"))
+    seed_scores(committed, (0.82,))
+
+    question = "How many learners are there?"
+    sql = "SELECT count(*) AS learners FROM warehouse.dim_student"
+    system = load_prompt("grounding")
+    responses = dict(
+        canned(
+            system,
+            plan_prompt(question),
+            _json.dumps({"answerable": True, "sql": sql, "reason": ""}),
+        )
+    )
+    result = run_generated_query(committed, sql)
+    responses.update(
+        canned(
+            system,
+            answer_prompt(question, result),
+            _json.dumps(
+                {"claims": [{"text": "There are 91 learners.", "source": "row:0"}]}
+            ),
+        )
+    )
+    use(StubProvider(responses))
+
+    response = client.post("/api/ask", json={"question": question})
+
+    assert response.status_code == 200
+    assert response.json()["answered"] is False
+
+    rows = committed.execute(
+        text(
+            "SELECT outcome, detail FROM warehouse.llm_call "
+            "WHERE operation = 'qa' ORDER BY llm_call_key DESC"
+        )
+    ).fetchall()
+    print("ROWS:", rows)
+    detail = rows[0][1] if rows else None
+    assert detail is not None
+    assert "91" in detail, (
+        "the row records that verification failed but not which figure "
+        "broke — the same discard as the summary path"
+    )

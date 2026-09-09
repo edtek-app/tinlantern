@@ -184,7 +184,14 @@ def ask_question(body: Question) -> dict:
                     provider=provider.name,
                     model=model,
                     latency_ms=timer.elapsed_ms,
-                    detail=answer.refusal_reason,
+                    # The objections too, not just the sentence. When an
+                    # answer is withheld after a query ran, which claim
+                    # broke is the only thing this column could carry
+                    # that no other column does.
+                    detail=" | ".join(
+                        filter(None, (answer.refusal_reason, *answer.problems))
+                    )
+                    or None,
                 )
                 return {
                     "answered": answer.answered,

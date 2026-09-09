@@ -127,6 +127,16 @@ def read(
     )
 
 
+def _detail(result: AdvisorSummary) -> str | None:
+    """The reason AND what it objected to, for the telemetry row."""
+    if result.from_model:
+        return None
+    reason = str(result.fallback_reason) if result.fallback_reason else "fallback"
+    if not result.problems:
+        return reason
+    return f"{reason}: " + " | ".join(result.problems)
+
+
 def generate(
     connection: Connection, detail: LearnerDetail, provider: Provider
 ) -> AdvisorSummary:
@@ -148,6 +158,11 @@ def generate(
         model=getattr(provider, "model", provider.name),
         latency_ms=timer.elapsed_ms,
         model_version=detail.model_version,
-        detail=(str(result.fallback_reason) if result.fallback_reason else None),
+        # What verification OBJECTED TO, not merely that it did. The
+        # reason alone duplicates the `outcome` column beside it, and a
+        # stored reason that repeats its neighbour is a diagnostic gap
+        # wearing the shape of observability — recovering these cost 25
+        # live API calls to re-derive what this line had in hand.
+        detail=_detail(result),
     )
     return result

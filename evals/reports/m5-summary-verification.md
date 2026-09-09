@@ -125,3 +125,27 @@ the code had already produced.
 
 Second occurrence of that shape; the eval report's "could not be
 verified" was the first, at seven calls.
+
+## These numbers are unaffected by the Q&A telemetry bug
+
+> **Added 2026-09-09, after this report was
+> frozen.** The provenance header above dates the MEASUREMENT; this
+> section was written later and changes no number in it. The freeze
+> protects the results from being quietly improved, not the document
+> from gaining evidence about whether the results can be trusted.
+
+Investigating the above uncovered a separate defect: **Q&A telemetry
+was being silently discarded** whenever a generated query had run,
+because the query sets `transaction_read_only` for the remainder of the
+caller's transaction and `record()` swallows its own failures by
+design. A reader who learns that will reasonably doubt every number in
+this table, so: **the summary path was verified unaffected.**
+
+- `warehouse.llm_call` holds **120 summary rows — 95 `ok` + 25
+  `fallback`** — matching the 120 rows in `learner_summary` exactly. No
+  summary went unrecorded.
+- Neither `app/dashboard/summaries.py` nor `app/llm/summary.py` runs a
+  read-only query, so nothing ever made those transactions read-only.
+- `qa` rows at the time of this run: **0**, consistent with the defect.
+
+The 25 fallbacks counted here are complete, not a surviving fraction.
