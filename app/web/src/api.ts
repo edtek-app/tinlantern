@@ -10,6 +10,7 @@ import type {
   CohortOverview,
   EngagementTrend,
   LearnerDetail,
+  LearnerRanking,
   LearnerSummary,
 } from "./api-types";
 
@@ -58,6 +59,7 @@ async function detailOf(response: Response): Promise<string> {
 export const api = {
   cohort: () => get<CohortOverview>("/api/cohort"),
   engagement: () => get<EngagementTrend>("/api/engagement"),
+  learners: () => get<LearnerRanking>("/api/learners"),
   learner: (id: string) => get<LearnerDetail>(`/api/learners/${id}`),
   summary: (id: string) => get<LearnerSummary>(`/api/learners/${id}/summary`),
 
