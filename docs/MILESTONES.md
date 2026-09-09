@@ -13,7 +13,10 @@ so the first feature commit is already validated by the new gate. Folded
 into a feature task it is the kind of step that silently does not happen.
 
 **Closing a milestone regenerates its reports** (`make report`, and from
-M4 also `make evals` against the real provider) before the tag. Reports in
+M4 also `make evals` against the real provider) before the tag, **and
+from M5 runs `make demo-check`** — recorded demo responses are keyed to
+the cohort they were captured against, so a re-seed silently invalidates
+them and the failure otherwise surfaces mid-demo. Reports in
 `evals/reports/` are committed artifacts quoted elsewhere;
 each carries a provenance header naming the commit and row counts it was
 computed from, so a stale one declares itself — but only if someone looks.

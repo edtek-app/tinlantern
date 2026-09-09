@@ -87,7 +87,11 @@ which provider actually won, so you can check it from outside the
 process rather than trusting the setting.
 
 `make demo` refuses to run without the API and names the step you are
-missing rather than doing half the job.
+missing rather than doing half the job. It finishes by running
+`make demo-check`, which confirms the recorded responses are still true
+of the cohort now loaded — a recording is keyed to the data it was
+captured against, so re-seeding invalidates it, and without this the
+failure would surface mid-demo.
 
 `make etl` and `make dq` are separate on purpose: one exit code with one
 meaning each. A data-quality failure means the warehouse is wrong, not

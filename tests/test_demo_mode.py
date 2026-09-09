@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.config import provider_choice
 from app.llm.client import build_client
+from app.llm.prompt_library import load_prompt
 from app.llm.providers.stub import (
     RECORDED_PATH,
     Recorded,
@@ -200,3 +201,101 @@ def test_every_recorded_response_is_valid_json() -> None:
     for digest, recording in recorded_responses().items():
         parsed = json.loads(recording.body)
         assert isinstance(parsed, dict), f"{digest} is not an object"
+
+
+# --------------------------------------------------------------------------
+# Recordings go stale when the cohort changes, and that must be found
+# BEFORE the demo rather than during it
+# --------------------------------------------------------------------------
+
+
+def test_the_staleness_check_reports_a_changed_cohort(
+    connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The scenario M7 creates: recordings made against another cohort.
+
+    A recording is keyed by the request that produced it, and that
+    request embeds the rows the query returned. So changed data means
+    the recording is simply not found — correct, loud, and otherwise
+    discovered mid-demo. The checker moves that discovery earlier and
+    names which question went stale.
+
+    Needs no reference query: the digest covers every returned column,
+    which is stronger than comparing one figure a hand-written oracle
+    computes — and this repository's oracles have been wrong three times
+    in twelve.
+    """
+    from tools.check_demo_recordings import check
+
+    question = "How many learners are in this test?"
+    monkeypatch.setattr("app.llm.qa.plan_prompt", lambda q: f"PLAN:{q}", raising=True)
+    monkeypatch.setattr(
+        "tools.check_demo_recordings.plan_prompt", lambda q: f"PLAN:{q}"
+    )
+
+    system = load_prompt("grounding")
+    plan_body = json.dumps(
+        {
+            "answerable": True,
+            "sql": "SELECT count(*) AS learners FROM warehouse.dim_student",
+            "reason": "",
+        }
+    )
+    recordings = {
+        request_digest(system, f"PLAN:{question}"): Recorded(
+            body=plan_body, model="claude-opus-5", recorded_on="2026-09-08"
+        )
+    }
+    monkeypatch.setattr(
+        "tools.check_demo_recordings.recorded_responses", lambda: recordings
+    )
+
+    problems = check(connection, (question,))
+
+    assert len(problems) == 1
+    assert problems[0].question == question
+    assert "no longer matches" in problems[0].problem
+    assert "re-record" in problems[0].problem, "it must say how to fix it"
+
+
+def test_a_missing_plan_recording_is_reported_separately(
+    connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new question and a changed prompt need different responses.
+
+    One means "record it"; the other means a prompt file or the schema
+    description moved underneath every recording at once.
+    """
+    from tools.check_demo_recordings import check
+
+    monkeypatch.setattr("tools.check_demo_recordings.recorded_responses", lambda: {})
+
+    problems = check(connection, ("A question nobody recorded",))
+
+    assert len(problems) == 1
+    assert "no recorded plan" in problems[0].problem
+
+
+def test_a_refusal_cannot_go_stale(connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    """It never reached a query, so no data underlies it."""
+    from tools.check_demo_recordings import check
+
+    question = "What are their email addresses?"
+    monkeypatch.setattr(
+        "tools.check_demo_recordings.plan_prompt", lambda q: f"PLAN:{q}"
+    )
+    system = load_prompt("grounding")
+    recordings = {
+        request_digest(system, f"PLAN:{question}"): Recorded(
+            body=json.dumps(
+                {"answerable": False, "sql": "", "reason": "No contact details."}
+            ),
+            model="claude-opus-5",
+            recorded_on="2026-09-08",
+        )
+    }
+    monkeypatch.setattr(
+        "tools.check_demo_recordings.recorded_responses", lambda: recordings
+    )
+
+    assert check(connection, (question,)) == ()

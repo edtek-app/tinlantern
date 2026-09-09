@@ -113,9 +113,19 @@ demo:
 	$(MAKE) ingest
 	$(MAKE) etl
 	$(MAKE) score
+	$(MAKE) demo-check
 	@echo
 	@echo "Demo ready. Open the frontend with:  cd app/web && npm run dev"
 	@echo "Q&A replays recorded responses; no model is called."
+
+# Are the recorded responses still true of the loaded cohort?
+#
+# Staleness is already detected — a recording is keyed by the request
+# that produced it, and that request embeds the returned rows, so
+# changed data means the recording is not found and the stub raises.
+# That is loud and arrives MID-DEMO. This finds it first.
+demo-check:
+	python -m tools.check_demo_recordings
 
 lint:
 	ruff check . && ruff format --check .
