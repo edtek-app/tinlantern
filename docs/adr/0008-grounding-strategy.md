@@ -128,6 +128,19 @@ heavily, framing a borderline score as decisive. Both layers check
 *claims*; neither checks the *argument*. This is the largest open gap in
 M4's grounding and no mechanism in this ADR reduces it.
 
+**The dashboard's driver chart is a named instance of the same weakness,
+and text is the strongest mitigation available.** M5 renders drivers as
+horizontal bars with absolute values, ordered by size. No pie chart, no
+stacked bar, no percentage, and no "the top three explain X%" line — a
+test fails if any of those appear, because each asserts by construction
+that the parts sum to a whole. But ordering the bars by size is itself
+the useful ranking, and **a reader may still take the longest bar as
+"most of the risk"**. The caveat rendered inline beside the chart is the
+only defence, and it is a weak one: nothing stops someone reading the
+picture and skipping the sentence. Recorded rather than implied, because
+the honest position is that this mitigation is textual and the failure
+mode survives it.
+
 **The additivity check is a substring blacklist, not a semantic one.** It
 matches phrasings like "accounts for" and "sum to". It cannot tell a
 claim from its negation — the caveat we supply says the contributions
