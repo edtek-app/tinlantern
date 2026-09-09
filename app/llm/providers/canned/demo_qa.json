@@ -1,36 +1,36 @@
 {
   "04e2d8c060f59b7ab3450d33befc73e6": {
-    "body": "{\"answerable\": false, \"sql\": \"\", \"reason\": \"The warehouse has no final or course-level grade. `fact_assessment` holds per-statement scores (`scaled_score`, `raw_score`, `success`, `completion`) for individual activities and attempts, but there is no gradebook table, no course grade column, and no weighting or grading-scheme data that would let a final grade be derived. Averaging or maxing `scaled_score` across activities would produce a real number that is not the learner's final grade. Answering this would need a course grade fact (e.g. one row per learner per course with an official final grade), or at minimum the assessment weights and grading policy for each course.\"}",
-    "model": "claude-opus-5",
-    "recorded_on": "2026-09-09"
-  },
-  "0cf035fc468115386fba46c3d44dcbc0": {
-    "body": "{\"claims\": [{\"text\": \"The average scaled score across graded work is 0.67029573637808931927.\", \"source\": \"row:0\"}, {\"text\": \"That average is computed over 6,919 graded statements with a score.\", \"source\": \"row:0\"}]}",
+    "body": "{\"answerable\": false, \"sql\": \"\", \"reason\": \"The warehouse has no final-grade field. `fact_assessment` holds per-statement scores (`scaled_score`, `raw_score`, `success`, `completion`, `attempt_number`) for individual graded activities, but nothing records a course-level final grade, nor any grading weights, category structure, or gradebook total that would let one be derived. Aggregating per-activity scores (an average or max) would produce a real number that is not the final grade asked for. Answering this needs a gradebook or course-outcome table that the schema does not contain.\"}",
     "model": "claude-opus-5",
     "recorded_on": "2026-09-09"
   },
   "3211fb159c96528120d499f589747269": {
-    "body": "{\"answerable\": true, \"sql\": \"SELECT verb, count(*) AS event_count FROM warehouse.fact_activity GROUP BY verb ORDER BY event_count DESC, verb LIMIT 10;\", \"reason\": \"\"}",
+    "body": "{\"answerable\": true, \"sql\": \"SELECT verb, count(*) AS event_count FROM warehouse.fact_activity GROUP BY verb ORDER BY event_count DESC, verb ASC LIMIT 10;\", \"reason\": \"\"}",
+    "model": "claude-opus-5",
+    "recorded_on": "2026-09-09"
+  },
+  "5617e75e34475c6de1771ac63c5e9cef": {
+    "body": "{\"claims\": [{\"text\": \"38 learners are currently flagged as at risk.\", \"source\": \"row:0\"}, {\"text\": \"The cohort has 120 scored learners under model version a9d43ff.\", \"source\": \"row:0\"}, {\"text\": \"The latest scoring window closed 2026-02-09 05:00 UTC.\", \"source\": \"row:0\"}]}",
     "model": "claude-opus-5",
     "recorded_on": "2026-09-09"
   },
   "5cd647db984dd1c49d6c6a452c67e13a": {
-    "body": "{\"answerable\": true, \"sql\": \"WITH latest AS (\\n  SELECT model_version, window_close\\n  FROM warehouse.risk_score\\n  ORDER BY window_close DESC, scored_at DESC\\n  LIMIT 1\\n)\\nSELECT l.model_version AS model_version,\\n       l.window_close AS window_close,\\n       count(*) FILTER (WHERE r.alerted) AS alerted_learners,\\n       count(*) AS scored_learners\\nFROM warehouse.risk_score r\\nJOIN latest l\\n  ON r.model_version = l.model_version\\n AND r.window_close = l.window_close\\nGROUP BY l.model_version, l.window_close;\", \"reason\": \"\"}",
-    "model": "claude-opus-5",
-    "recorded_on": "2026-09-09"
-  },
-  "7e1dcf79c09146f962e4303fda543c0e": {
-    "body": "{\"claims\": [{\"text\": \"38 learners are flagged as at risk.\", \"source\": \"row:0\"}, {\"text\": \"That is out of 120 scored learners.\", \"source\": \"row:0\"}, {\"text\": \"The figures come from model version a9d43ff, for the scoring window closing 2026-02-09 05:00 UTC.\", \"source\": \"row:0\"}]}",
+    "body": "{\"answerable\": true, \"sql\": \"WITH latest_model AS (\\n    SELECT model_version\\n    FROM warehouse.risk_score\\n    GROUP BY model_version\\n    ORDER BY max(scored_at) DESC\\n    LIMIT 1\\n), latest_per_learner AS (\\n    SELECT DISTINCT ON (rs.student_key)\\n           rs.student_key,\\n           rs.model_version,\\n           rs.window_close,\\n           rs.risk,\\n           rs.alerted\\n    FROM warehouse.risk_score rs\\n    JOIN latest_model lm ON lm.model_version = rs.model_version\\n    ORDER BY rs.student_key, rs.window_close DESC, rs.scored_at DESC\\n)\\nSELECT model_version,\\n       max(window_close) AS latest_window_close,\\n       count(*) FILTER (WHERE alerted) AS alerted_learners,\\n       count(*) AS scored_learners\\nFROM latest_per_learner\\nGROUP BY model_version;\", \"reason\": \"\"}",
     "model": "claude-opus-5",
     "recorded_on": "2026-09-09"
   },
   "9a8b7b2e96b96e5dec285053b74ab554": {
-    "body": "{\"claims\": [{\"text\": \"The most frequent verb is 'played', with 57,752 events.\", \"source\": \"row:0\"}, {\"text\": \"The next highest is 'completed' at 37,245 events.\", \"source\": \"row:1\"}]}",
+    "body": "{\"claims\": [{\"text\": \"The most frequent verb is 'played', with 57,752 events.\", \"source\": \"row:0\"}, {\"text\": \"'completed' is next, with 37,245 events.\", \"source\": \"row:1\"}, {\"text\": \"'answered' follows with 30,974 events.\", \"source\": \"row:2\"}]}",
     "model": "claude-opus-5",
     "recorded_on": "2026-09-09"
   },
-  "f1b895742366edbec1f782ab32b778ba": {
-    "body": "{\"answerable\": true, \"sql\": \"SELECT avg(scaled_score) AS avg_scaled_score, count(*) AS graded_statements_with_score FROM warehouse.fact_assessment WHERE scaled_score IS NOT NULL;\", \"reason\": \"\"}",
+  "a0826362e26ab37d4650f81737c83cbc": {
+    "body": "{\"claims\": [{\"text\": \"The average scaled score across graded work is 0.67.\", \"source\": \"row:0\"}, {\"text\": \"That average is computed over 6,919 graded statements, all 6,919 of which carry a score.\", \"source\": \"row:0\"}]}",
+    "model": "claude-opus-5",
+    "recorded_on": "2026-09-09"
+  },
+  "cec59f41b9b8d969db14740e28ddf03d": {
+    "body": "{\"answerable\": true, \"sql\": \"SELECT round(avg(scaled_score)::numeric, 2) AS avg_scaled_score, count(*) AS graded_statements, count(scaled_score) AS scored_statements FROM warehouse.fact_assessment;\", \"reason\": \"\"}",
     "model": "claude-opus-5",
     "recorded_on": "2026-09-09"
   }
