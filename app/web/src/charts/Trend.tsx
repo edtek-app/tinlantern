@@ -7,19 +7,25 @@ import type { EngagementPoint } from "../api-types";
 // same window. The API refuses to serve one; this refuses to imply one.
 
 const WIDTH = 480;
-const HEIGHT = 160;
+const HEIGHT = 170;
+const FLOOR = 24;
+const TOP = 14;
 
 export function Trend({ points }: { points: EngagementPoint[] }) {
   const peak = Math.max(...points.map((point) => point.active_learners), 1);
   const step = points.length > 1 ? WIDTH / (points.length - 1) : 0;
+  const plot = HEIGHT - FLOOR - TOP;
+  const yOf = (value: number) => TOP + plot - (value / peak) * plot;
 
   const path = points
     .map((point, index) => {
       const x = index * step;
-      const y = HEIGHT - 20 - (point.active_learners / peak) * (HEIGHT - 40);
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${yOf(point.active_learners).toFixed(1)}`;
     })
     .join(" ");
+
+  const first = points[0];
+  const last = points[points.length - 1];
 
   return (
     <figure>
@@ -32,12 +38,23 @@ export function Trend({ points }: { points: EngagementPoint[] }) {
         role="img"
         aria-label={`Weekly active learners across ${points.length} weeks`}
       >
+        {/* Chrome as <line>: a test counts <circle> per point, and the
+            baseline anchors the series to a zero a reader can see. */}
+        <line x1={0} x2={WIDTH} y1={yOf(peak)} y2={yOf(peak)} className="gridline" />
+        <line x1={0} x2={WIDTH} y1={yOf(0)} y2={yOf(0)} className="baseline" />
+        <text x={-8} y={yOf(peak) + 3.5} textAnchor="end" className="axis">
+          {peak}
+        </text>
+        <text x={-8} y={yOf(0) + 3.5} textAnchor="end" className="axis">
+          0
+        </text>
+
         <path d={path} className="trend" fill="none" />
         {points.map((point, index) => (
           <circle
             key={point.week_start}
             cx={index * step}
-            cy={HEIGHT - 20 - (point.active_learners / peak) * (HEIGHT - 40)}
+            cy={yOf(point.active_learners)}
             r={3}
           >
             <title>
@@ -45,6 +62,19 @@ export function Trend({ points }: { points: EngagementPoint[] }) {
             </title>
           </circle>
         ))}
+
+        {/* Selective direct labels — the ends, never a number on every
+            point. */}
+        {first && (
+          <text x={0} y={HEIGHT - 8} textAnchor="start" className="axis">
+            {first.week_start}
+          </text>
+        )}
+        {last && points.length > 1 && (
+          <text x={WIDTH} y={HEIGHT - 8} textAnchor="end" className="axis">
+            {last.week_start}
+          </text>
+        )}
       </svg>
     </figure>
   );

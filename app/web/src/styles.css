@@ -260,7 +260,13 @@ svg {
   display: block;
   width: 100%;
   height: auto;
+  /* visible, so the y-axis labels drawn at negative x are not clipped */
   overflow: visible;
+}
+
+figure {
+  /* room for the trend's y-axis labels, drawn at negative x */
+  padding-left: calc(var(--gap-4) + 1.5rem);
 }
 
 /* Thin marks, recessive chrome. */
@@ -296,6 +302,11 @@ circle {
 svg text {
   font-size: 11px;
   fill: var(--ink-secondary);
+}
+
+svg text.axis {
+  font-size: 10px;
+  fill: var(--ink-muted);
 }
 
 svg text.value {

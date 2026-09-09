@@ -35,6 +35,13 @@ export function Drivers({
         role="img"
         aria-label={`${drivers.length} risk drivers, largest first`}
       >
+        <line
+          x1={180}
+          x2={180}
+          y1={0}
+          y2={drivers.length * ROW}
+          className="baseline"
+        />
         {drivers.map((driver, index) => {
           const length = (Math.abs(driver.contribution) / widest) * (WIDTH - 220);
           return (
