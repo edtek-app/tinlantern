@@ -90,7 +90,12 @@ def rejection_rows(engine, statement_id: str) -> list[dict]:
 
 
 def test_health_does_not_need_the_database(client) -> None:
-    assert client.get("/health").json() == {"status": "ok"}
+    body = client.get("/health").json()
+    # The name of this test is the assertion. Exact-payload equality was
+    # over-specification: it broke when /health gained the provider
+    # fields, reporting a schema addition as a database-independence
+    # failure.
+    assert body["status"] == "ok"
 
 
 def test_a_single_statement_is_stored(client, engine) -> None:

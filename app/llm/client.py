@@ -25,9 +25,10 @@ error instead.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
+
+from app.config import provider_choice
 
 #: Prefixed to every stub response. A canned answer that escapes into a
 #: report, a screenshot, or an eval artifact must declare what it is on
@@ -191,7 +192,12 @@ def build_client(provider: str | None = None) -> Provider:
         UnknownProvider: If the name is not one of ``PROVIDERS``.
         ProviderNotAvailable: If the provider is known but not yet built.
     """
-    name = provider if provider is not None else os.environ.get("LLM_PROVIDER")
+    # An explicit argument wins (tests, the eval harness). Otherwise
+    # DEMO_MODE overrides LLM_PROVIDER, deliberately and loudly
+    # (app/config.py): a demo that can spend money or exercise a
+    # credential is a liability, and a safety property that defers to
+    # the environment is not a safety property.
+    name = provider if provider is not None else provider_choice().provider
     if not name:
         raise UnknownProvider(_UNSET)
 
