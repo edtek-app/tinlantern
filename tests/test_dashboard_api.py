@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Connection, text
 
 from app.dashboard.queries import (
-    BIN_LABELS,
+    BIN_COUNT,
     bin_edges,
     cohort_overview,
     engagement_trend,
@@ -248,7 +248,47 @@ def test_the_alerted_bin_edge_is_the_alert_threshold() -> None:
     assert bin_edges()[2] == ALERT_THRESHOLD
     assert bin_edges(0.6)[2] == 0.6
     assert bin_edges(0.6) != bin_edges(0.35), "edges must follow the threshold"
-    assert len(bin_edges()) == len(BIN_LABELS) + 1
+    assert len(bin_edges()) == BIN_COUNT + 1
+
+
+def test_no_bin_label_competes_with_the_headline_stat() -> None:
+    """Bins are named by their edges so they cannot contradict the stat.
+
+    They were words — and the bin named "alerted" held 2 learners
+    directly beneath a headline reading "38 flagged", because `alerted`
+    and `high` are BOTH above the threshold. A reader scanning the chart
+    plausibly took "2" as the alerted count and found it disagreeing
+    with the stat row.
+
+    Any pair of words reintroduces this: one of them will match the
+    headline's vocabulary and carry a number that is only part of it. A
+    range describes the interval instead of naming a state, so there is
+    nothing for a reader to match. Which bins are alerted is carried by
+    colour.
+    """
+    from app.dashboard.queries import bin_labels
+
+    # The words the headline stat uses about the cohort.
+    headline = {"alerted", "flagged", "risk", "at-risk", "high", "low"}
+
+    for label in bin_labels():
+        words = set(label.replace("–", " ").replace("-", " ").lower().split())
+        assert not (words & headline), (
+            f"bin label {label!r} borrows the headline's vocabulary. A "
+            "reader will match it against 'N flagged' and find a number "
+            "that is only part of that total."
+        )
+        assert any(character.isdigit() for character in label), (
+            f"bin label {label!r} is not an interval"
+        )
+
+
+def test_bin_labels_follow_the_threshold() -> None:
+    """Renaming by edges keeps them derived, not written down twice."""
+    from app.dashboard.queries import bin_labels
+
+    assert bin_labels(0.35)[2].startswith("0.35")
+    assert bin_labels(0.60)[2].startswith("0.60")
 
 
 def test_every_learner_lands_in_exactly_one_bin(connection: Connection) -> None:

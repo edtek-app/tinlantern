@@ -44,7 +44,29 @@ def bin_edges(threshold: float = ALERT_THRESHOLD) -> tuple[float, ...]:
     return (0.0, threshold / 2, threshold, (1.0 + threshold) / 2, 1.0)
 
 
-BIN_LABELS: tuple[str, ...] = ("low", "approaching", "alerted", "high")
+#: Bins are labelled by their EDGES, not by words.
+#:
+#: They were "low / approaching / alerted / high", and the bin named
+#: "alerted" held 2 learners directly beneath a headline reading "38
+#: flagged" — because `alerted` and `high` are BOTH above the threshold
+#: and 2 + 36 = 38. Any pair of words invites a reader to match one
+#: against the headline and find a number that disagrees; a range
+#: cannot, because it describes the interval rather than naming a
+#: state. It is also the most honest description of what these are:
+#: intervals derived from `ALERT_THRESHOLD`.
+#:
+#: Which bins are alerted is carried by colour instead — the status
+#: hue, the same one the headline uses.
+def bin_labels(threshold: float = ALERT_THRESHOLD) -> tuple[str, ...]:
+    """Each bin named by the interval it covers."""
+    edges = bin_edges(threshold)
+    return tuple(
+        f"{edges[index]:.2f}–{edges[index + 1]:.2f}" for index in range(len(edges) - 1)
+    )
+
+
+#: How many bins there are. The names come from `bin_labels`.
+BIN_COUNT = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,14 +183,15 @@ def cohort_overview(
         return None
 
     edges = bin_edges(threshold)
-    counts = [0] * len(BIN_LABELS)
+    labels = bin_labels(threshold)
+    counts = [0] * BIN_COUNT
     for risk, _alerted, _window in rows:
         value = float(risk)
-        for index in range(len(BIN_LABELS)):
+        for index in range(BIN_COUNT):
             upper = edges[index + 1]
             # The last bin is closed at the top so a risk of exactly 1.0
             # lands somewhere rather than being silently dropped.
-            if value < upper or index == len(BIN_LABELS) - 1:
+            if value < upper or index == BIN_COUNT - 1:
                 counts[index] += 1
                 break
 
@@ -180,12 +203,12 @@ def cohort_overview(
         alerted=sum(1 for _risk, alerted, _window in rows if alerted),
         distribution=tuple(
             Bin(
-                label=BIN_LABELS[index],
+                label=labels[index],
                 lower=edges[index],
                 upper=edges[index + 1],
                 learners=counts[index],
             )
-            for index in range(len(BIN_LABELS))
+            for index in range(BIN_COUNT)
         ),
     )
 
