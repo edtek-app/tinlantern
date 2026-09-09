@@ -59,6 +59,7 @@ from app.llm.client import (
     MalformedResponse,
     ModelRefused,
     Provider,
+    UnregisteredPrompt,
     build_client,
     is_transport_failure,
 )
@@ -68,6 +69,35 @@ router = APIRouter(prefix="/api", tags=["insights"])
 
 #: One retry, then surface it. Two would be a policy nobody measured.
 MAX_ATTEMPTS = 2
+
+
+def _outside_the_demo_set() -> dict:
+    """A question demo mode has no recording for.
+
+    The system working as designed, not an error, so it takes the same
+    200-with-`answered: false` treatment as a question the warehouse
+    cannot answer. A visitor's first action is typing something the
+    recording set does not contain, and that moment should read as a
+    BOUNDED demo rather than a broken one.
+
+    This does not loosen the stub's contract anywhere else. The stub
+    still raises `UnregisteredPrompt`; only this endpoint, and only in
+    demo mode, converts it — because only here is an unrecorded
+    question an expected event rather than a missing fixture.
+    """
+    listed = "\n".join(f"  · {question}" for question in DEMO_QUESTIONS)
+    return {
+        "answered": False,
+        "text": (
+            "This is a demo running on recorded answers, so it can only "
+            "answer a few prepared questions — no language model is "
+            "called. Try one of these:\n" + listed
+        ),
+        "refusal_reason": "outside the demo's recorded question set",
+        "citations": {},
+        "sql": None,
+        "problems": [],
+    }
 
 
 def _provider() -> Provider:
@@ -142,6 +172,22 @@ def ask_question(body: Question) -> dict:
                     detail=str(broken),
                 )
                 answer = None
+            except UnregisteredPrompt as unrecorded:
+                # Demo mode only. Outside it, an unregistered prompt is a
+                # missing fixture and must keep raising — that is what
+                # stops a test passing against a response written for
+                # something else.
+                if not demo_mode():
+                    raise
+                record(
+                    operation="qa",
+                    outcome=Outcome.REFUSED,
+                    provider=provider.name,
+                    model=model,
+                    latency_ms=timer.elapsed_ms,
+                    detail=f"outside the demo set: {unrecorded}"[:2000],
+                )
+                return _outside_the_demo_set()
             except ModelRefused as declined:
                 # Specific before broad: ModelRefused is an Exception, and
                 # a broad handler placed first would swallow a refusal and

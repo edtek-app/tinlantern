@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.db import transaction
+from app.demo import DEMO_QUESTIONS
 from app.llm.client import build_client
 from app.llm.prompt_library import load_prompt
 from app.llm.providers.stub import request_digest
@@ -27,17 +28,6 @@ from app.llm.qa import ANSWER_SCHEMA, PLAN_SCHEMA, answer_prompt, plan_prompt
 from app.llm.query import run_generated_query
 
 DEFAULT_PATH = Path("app/llm/providers/canned/demo_qa.json")
-
-#: The questions a demo actually gets asked. Deliberately a mix: three
-#: it can answer and one it must refuse, because a demo that only shows
-#: successes teaches nothing about how the system behaves at its edge —
-#: and refusing well is the strongest result M4 measured.
-DEMO_QUESTIONS: tuple[str, ...] = (
-    "How many learners are currently flagged as at risk?",
-    "What is the average scaled score across all graded work?",
-    "Which verb appears most often in the activity records?",
-    "What is each learner's final grade for the course?",
-)
 
 
 def record() -> dict[str, dict[str, str]]:

@@ -299,3 +299,98 @@ def test_a_refusal_cannot_go_stale(connection, monkeypatch: pytest.MonkeyPatch) 
     )
 
     assert check(connection, (question,)) == ()
+
+
+# --------------------------------------------------------------------------
+# A question outside the recorded set is a bounded demo, not a 500
+# --------------------------------------------------------------------------
+
+
+def test_an_unrecorded_question_refuses_rather_than_500(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A visitor's first action is typing something we do not have.
+
+    That moment should read as a BOUNDED demo, not a broken one. It is
+    the system working as designed, so it takes the same
+    200-with-answered:false treatment as a question the warehouse
+    cannot answer.
+    """
+    from app.api import insights
+    from app.llm.providers.stub import StubProvider
+
+    monkeypatch.setenv("DEMO_MODE", "true")
+    monkeypatch.setattr(insights, "_provider", lambda: StubProvider({}, {}))
+
+    response = client.post("/api/ask", json={"question": "Anything unrecorded"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answered"] is False
+    assert "demo" in body["text"].lower()
+    assert "recorded" in body["text"].lower()
+
+
+def test_the_refusal_names_the_questions_it_can_answer(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bounded demo that does not say what its bounds are is a wall."""
+    from app.api import insights
+    from app.demo import DEMO_QUESTIONS
+    from app.llm.providers.stub import StubProvider
+
+    monkeypatch.setenv("DEMO_MODE", "true")
+    monkeypatch.setattr(insights, "_provider", lambda: StubProvider({}, {}))
+
+    body = client.post("/api/ask", json={"question": "Unrecorded"}).json()
+
+    for question in DEMO_QUESTIONS:
+        assert question in body["text"], f"{question!r} was not offered"
+
+
+def test_outside_demo_mode_an_unregistered_prompt_still_raises(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The conversion is demo-mode only; the stub's contract is unchanged.
+
+    Outside demo mode an unregistered prompt is a MISSING FIXTURE, and
+    it must keep raising — that is what stops a test passing against a
+    response written for something else.
+    """
+    from app.api import insights
+    from app.llm.client import UnregisteredPrompt
+    from app.llm.providers.stub import StubProvider
+
+    monkeypatch.delenv("DEMO_MODE", raising=False)
+    monkeypatch.setattr(insights, "_provider", lambda: StubProvider({}, {}))
+
+    # It propagates rather than being converted. Asserted as a raise
+    # rather than a 500 because that is the actual property: the
+    # endpoint does not handle it at all outside demo mode.
+    with pytest.raises(UnregisteredPrompt):
+        client.post("/api/ask", json={"question": "Anything"})
+
+
+def test_the_stub_itself_still_raises_for_every_caller() -> None:
+    """Asserted at the source, not only through the endpoint."""
+    from app.llm.client import UnregisteredPrompt
+    from app.llm.providers.stub import StubProvider
+
+    with pytest.raises(UnregisteredPrompt):
+        StubProvider({}, {}).complete(system="sys", prompt="nobody recorded this")
+
+
+def test_the_demo_question_set_ships() -> None:
+    """The API tells a visitor which questions exist, so the list cannot
+    live in `tools/` — that never ships, and an endpoint importing it
+    would work locally and fail in a deployed runtime."""
+    import tomllib
+    from pathlib import Path
+
+    from app.demo import DEMO_QUESTIONS
+
+    assert DEMO_QUESTIONS
+    config = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+    )
+    assert "app" in config["tool"]["setuptools"]["packages"]

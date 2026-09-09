@@ -22,11 +22,11 @@ import json
 from dataclasses import dataclass
 
 from app.db import transaction
+from app.demo import DEMO_QUESTIONS
 from app.llm.prompt_library import load_prompt
 from app.llm.providers.stub import Recorded, recorded_responses, request_digest
 from app.llm.qa import answer_prompt, plan_prompt
 from app.llm.query import run_generated_query
-from tools.record_demo_responses import DEMO_QUESTIONS
 
 
 @dataclass(frozen=True, slots=True)
