@@ -97,6 +97,26 @@ web-test:
 api-types:
 	python -m tools.generate_api_types
 
+# Brings a demo cohort into being, as far as one target honestly can.
+#
+# `ingest` posts over HTTP to a RUNNING api, so this cannot be
+# self-contained without either starting a server or bypassing the
+# endpoint. Bypassing it was rejected: a demo that loads by a path the
+# real system never uses is evidence for something other than the
+# product. So this checks, and fails naming the step you are missing.
+demo:
+	@curl -sf http://localhost:8000/health >/dev/null || { \
+	  echo "the API is not running. Demo mode needs it in another terminal:"; \
+	  echo "    DEMO_MODE=true make run"; \
+	  echo "then re-run \`make demo\` here."; exit 2; }
+	$(MAKE) seed
+	$(MAKE) ingest
+	$(MAKE) etl
+	$(MAKE) score
+	@echo
+	@echo "Demo ready. Open the frontend with:  cd app/web && npm run dev"
+	@echo "Q&A replays recorded responses; no model is called."
+
 lint:
 	ruff check . && ruff format --check .
 

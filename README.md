@@ -57,7 +57,37 @@ make run     # serve the API
 # in a second shell, once the API is up:
 make ingest          # load the cohort through the ingestion endpoint
 make etl && make dq  # build the warehouse, then check it
+make score           # risk scores, drivers, and advisor summaries
 ```
+
+### The demo
+
+Two terminals, because ingestion goes through the HTTP endpoint. A
+single self-contained target would have to bypass it, and a demo that
+loads by a path the real system never uses is evidence for something
+other than the product.
+
+```sh
+# terminal 1
+DEMO_MODE=true make run
+
+# terminal 2 — seeds, ingests, builds, and scores
+make demo
+
+# terminal 3 — the dashboard
+cd app/web && npm run dev
+```
+
+**`DEMO_MODE=true` overrides `LLM_PROVIDER`.** With it on, no language
+model is ever called: Q&A replays responses recorded once from a real
+model, and each reply says which model wrote it and when. A public demo
+that can spend money or exercise a credential is a liability, so the
+switch does not defer to the environment — and `GET /health` reports
+which provider actually won, so you can check it from outside the
+process rather than trusting the setting.
+
+`make demo` refuses to run without the API and names the step you are
+missing rather than doing half the job.
 
 `make etl` and `make dq` are separate on purpose: one exit code with one
 meaning each. A data-quality failure means the warehouse is wrong, not
