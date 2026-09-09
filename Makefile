@@ -97,22 +97,35 @@ web-test:
 api-types:
 	python -m tools.generate_api_types
 
-# Brings a demo cohort into being, as far as one target honestly can.
+# Checks a demo is ready to show. It does NOT build one.
 #
-# `ingest` posts over HTTP to a RUNNING api, so this cannot be
-# self-contained without either starting a server or bypassing the
-# endpoint. Bypassing it was rejected: a demo that loads by a path the
-# real system never uses is evidence for something other than the
-# product. So this checks, and fails naming the step you are missing.
+# It deliberately does not score. Recorded answers embed the row values
+# the query returned — including `model_version`, which is the git
+# commit SHA — so ANY re-score invalidates every recording. A target
+# that re-scored and then reported its own output as stale would be
+# telling the truth about a problem it had just caused.
+#
+# `ingest` also posts over HTTP to a RUNNING api, so a self-contained
+# target would have to bypass the endpoint, and a demo that loads by a
+# path the real system never uses is evidence for something other than
+# the product. So this checks and fails naming the step you are missing.
 demo:
 	@curl -sf http://localhost:8000/health >/dev/null || { \
 	  echo "the API is not running. Demo mode needs it in another terminal:"; \
 	  echo "    DEMO_MODE=true make run"; \
 	  echo "then re-run \`make demo\` here."; exit 2; }
-	$(MAKE) seed
-	$(MAKE) ingest
-	$(MAKE) etl
-	$(MAKE) score
+	@python -c "import sys; from sqlalchemy import text; from app.db import transaction; \
+	  from contextlib import suppress; \
+	  exec('with transaction() as c:\n n = c.execute(text(\'SELECT count(*) FROM warehouse.risk_score\')).scalar()\nsys.exit(0 if n else 3)')" 2>/dev/null || { \
+	  echo "no scored cohort. Demo mode replays answers recorded against a"; \
+	  echo "SPECIFIC scoring run, so this target does not score — scoring is"; \
+	  echo "what invalidates the recordings, and a target that causes the"; \
+	  echo "staleness it then reports is incoherent."; \
+	  echo; \
+	  echo "    make seed && make ingest && make etl && make score"; \
+	  echo "    python -m tools.record_demo_responses   # needs a real provider"; \
+	  echo; \
+	  echo "then re-run \`make demo\`."; exit 3; }
 	$(MAKE) demo-check
 	@echo
 	@echo "Demo ready. Open the frontend with:  cd app/web && npm run dev"

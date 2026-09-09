@@ -16,7 +16,17 @@ into a feature task it is the kind of step that silently does not happen.
 M4 also `make evals` against the real provider) before the tag, **and
 from M5 runs `make demo-check`** — recorded demo responses are keyed to
 the cohort they were captured against, so a re-seed silently invalidates
-them and the failure otherwise surfaces mid-demo. Reports in
+them and the failure otherwise surfaces mid-demo.
+
+**Any re-score requires re-recording the demo** (`python -m
+tools.record_demo_responses`, which needs a real provider). Recorded
+answers embed the rows the query returned, and one of those columns is
+`model_version` — the git commit SHA — so a re-score after any commit
+makes every recording unreachable. `make demo` therefore does not score;
+it checks. **This makes the demo cohort a pinned artifact: a specific
+seed AND a specific model_version, which is a constraint on M7's public
+deployment story and belongs in its planning rather than being
+discovered there.** Reports in
 `evals/reports/` are committed artifacts quoted elsewhere;
 each carries a provenance header naming the commit and row counts it was
 computed from, so a stale one declares itself — but only if someone looks.
