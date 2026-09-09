@@ -236,22 +236,73 @@ def test_a_declining_model_is_also_200(client: TestClient) -> None:
 
 
 def test_a_failing_telemetry_write_returns_rather_than_raises(
-    connection: Connection,
+    committed: Connection, caplog
 ) -> None:
-    """A metrics write that fails an endpoint is worse than no metric."""
-    connection.execute(text("DROP TABLE warehouse.llm_call"))
+    """A metrics write that fails an endpoint is worse than no metric.
 
-    failure = record(
-        connection,
-        operation="qa",
-        outcome=Outcome.OK,
-        provider="stub",
-        model="stub",
-        latency_ms=1,
-    )
+    But silence is right for ONE transient and wrong for a persistent
+    fault: a write that fails every time is a misconfiguration, and it
+    must not look like a system with nothing to report. So it is
+    swallowed AND logged.
+    """
+    import logging
+
+    committed.execute(text("ALTER TABLE warehouse.llm_call RENAME TO llm_call_x"))
+    try:
+        with caplog.at_level(logging.ERROR):
+            failure = record(
+                operation="qa",
+                outcome=Outcome.OK,
+                provider="stub",
+                model="stub",
+                latency_ms=1,
+            )
+    finally:
+        committed.execute(text("ALTER TABLE warehouse.llm_call_x RENAME TO llm_call"))
 
     assert failure is not None, "the write failed and the failure is reported"
     assert isinstance(failure, Exception), "returned, not raised"
+    assert caplog.records, (
+        "the failure was swallowed silently — replacing one invisible "
+        "failure with another"
+    )
+    assert "telemetry write failed" in caplog.text
+
+
+def test_telemetry_survives_a_read_only_transaction(
+    committed: Connection,
+) -> None:
+    """The bug this fix exists for, on the path where it actually broke.
+
+    A generated query sets `transaction_read_only` for the remainder of
+    the caller's transaction, so every telemetry write after one was
+    refused — and `record` swallows failures, so the row vanished with
+    no error. Q&A's OK and REFUSED outcomes were lost; only the paths
+    that raise BEFORE the query ran were ever recorded, which is why
+    the existing telemetry tests all passed.
+
+    Now it writes in its own transaction, following M1's precedent for
+    rejections: the record must outlive the constraints of the thing it
+    describes.
+    """
+    from app.db import transaction as own_transaction
+    from app.llm.query import execute_readonly
+
+    committed.execute(text("DELETE FROM warehouse.llm_call"))
+
+    with own_transaction() as connection:
+        execute_readonly(connection, "SELECT 1 AS one")
+        failure = record(
+            operation="qa",
+            outcome=Outcome.OK,
+            provider="stub",
+            model="stub",
+            latency_ms=1,
+            detail="after a generated query",
+        )
+
+    assert failure is None, f"the telemetry write was refused: {failure}"
+    assert outcome_counts(committed).get(str(Outcome.OK)) == 1
 
 
 # --------------------------------------------------------------------------

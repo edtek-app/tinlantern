@@ -142,7 +142,6 @@ def generate(
 
     store(connection, detail, result)
     record(
-        connection,
         operation="summary",
         outcome=Outcome.OK if result.from_model else Outcome.FALLBACK,
         provider=provider.name,

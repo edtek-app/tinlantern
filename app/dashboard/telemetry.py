@@ -8,13 +8,25 @@ a retry policy against.
 
 **Writing a row must never fail the request it describes.** A metrics
 write that takes down an endpoint is worse than a missing metric, so
-`record` swallows its own failures and says so rather than propagating.
-The one thing it will not do is hide them silently from a developer:
-the exception is returned, and the caller may log it.
+`record` swallows its own failures rather than propagating them.
+
+**It writes in its OWN transaction**, following the precedent M1 set for
+rejections: the record must outlive the constraints of the thing it
+describes. The Q&A path proved why — a generated query sets
+`transaction_read_only` for the remainder of the caller's transaction,
+so every telemetry write after one silently failed. Two correct
+decisions (a read-only boundary; metrics that never break a request)
+combined into a hole, and the swallowing is what hid it.
+
+**A swallowed failure is still logged.** Silence is right for one
+transient and wrong for a persistent fault: a metrics write that fails
+every time is a misconfiguration, and it currently looks identical to a
+system with nothing to report.
 """
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -22,6 +34,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from sqlalchemy import Connection, text
+
+from app.db import transaction
+
+logger = logging.getLogger(__name__)
 
 
 class Outcome(StrEnum):
@@ -51,7 +67,6 @@ _INSERT = text(
 
 
 def record(
-    connection: Connection,
     *,
     operation: str,
     outcome: Outcome,
@@ -63,26 +78,42 @@ def record(
 ) -> Exception | None:
     """Write one call's outcome.
 
+    Opens its own transaction. The caller's may be read-only — a
+    generated query makes it so for its remainder — and a record that
+    cannot survive the constraints of what it describes is not a record.
+
     Returns:
         None on success, or the exception that stopped it. Returned
         rather than raised: the request this describes has already been
         served, and failing it now to report a metrics problem would
-        turn an observability gap into an outage.
+        turn an observability gap into an outage. It is also LOGGED,
+        because a write that fails every time is a misconfiguration and
+        must not look like a system with nothing to report.
     """
     try:
-        connection.execute(
-            _INSERT,
-            {
-                "operation": operation,
-                "outcome": str(outcome),
-                "provider": provider,
-                "model": model,
-                "latency_ms": latency_ms,
-                "model_version": model_version,
-                "detail": detail[:2000] if detail else None,
-            },
-        )
+        with transaction() as connection:
+            connection.execute(
+                _INSERT,
+                {
+                    "operation": operation,
+                    "outcome": str(outcome),
+                    "provider": provider,
+                    "model": model,
+                    "latency_ms": latency_ms,
+                    "model_version": model_version,
+                    "detail": detail[:2000] if detail else None,
+                },
+            )
     except Exception as failure:  # noqa: BLE001 - deliberately broad, see above
+        logger.error(
+            "telemetry write failed for %s/%s: %s. The request was served; "
+            "this row is lost. If this repeats, it is a misconfiguration "
+            "rather than a transient, and the table will look like a "
+            "system with nothing to report.",
+            operation,
+            outcome,
+            failure,
+        )
         return failure
     return None
 

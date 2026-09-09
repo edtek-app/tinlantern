@@ -128,7 +128,6 @@ def ask_question(body: Question) -> dict:
             except MalformedResponse as broken:
                 last = broken
                 record(
-                    connection,
                     operation="qa",
                     outcome=(
                         Outcome.RETRIED
@@ -146,7 +145,6 @@ def ask_question(body: Question) -> dict:
                 # a broad handler placed first would swallow a refusal and
                 # serve it as a fault.
                 record(
-                    connection,
                     operation="qa",
                     outcome=Outcome.REFUSED,
                     provider=provider.name,
@@ -170,7 +168,6 @@ def ask_question(body: Question) -> dict:
                 if not is_transport_failure(failure):
                     raise
                 record(
-                    connection,
                     operation="qa",
                     outcome=Outcome.TRANSPORT_ERROR,
                     provider=provider.name,
@@ -182,7 +179,6 @@ def ask_question(body: Question) -> dict:
                 answer = None
             else:
                 record(
-                    connection,
                     operation="qa",
                     outcome=Outcome.OK if answer.answered else Outcome.REFUSED,
                     provider=provider.name,
