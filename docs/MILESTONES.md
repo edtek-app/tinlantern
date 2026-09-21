@@ -160,7 +160,7 @@ failure modes documented.
 
 ## M5 — Dashboard
 **Goal:** A screen a program director would actually use.
-- [ ] Cohort overview: risk distribution, plus an **ENGAGEMENT trend**
+- [x] Cohort overview: risk distribution, plus an **ENGAGEMENT trend**
       (weekly active learners) — deliberately not a risk trend. Only one
       `window_close` exists, so a risk line would be a single point, or a
       line drawn through repeated scoring runs of the same window, which
@@ -171,10 +171,10 @@ failure modes documented.
       misreading a risk line would invite. **Revisit trigger:** scoring
       several windows makes a real risk trend available; that is M3 work
       to reopen, not a gap here
-- [ ] Student drill-down (score, drivers with their non-additivity
+- [x] Student drill-down (score, drivers with their non-additivity
       caveat, summary), Q&A panel with citations shown
-- [ ] FastAPI endpoints serving the above; React frontend
-- [ ] Demo mode: seeded synthetic cohort, cached LLM responses
+- [x] FastAPI endpoints serving the above; React frontend
+- [x] Demo mode: seeded synthetic cohort, cached LLM responses
 **Gate:** `make gate-m5` — API contract tests; frontend builds; smoke test
 against demo seed.
 **Owner review:** UX coherent; screenshots/GIF captured for README.
